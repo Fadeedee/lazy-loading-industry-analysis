@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "四类懒加载数据路径对比",
+    "locale": "zh-CN",
+    "viewBox": [1260, 880],
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "file_path", "label": "文件级", "focus": ["file_access", "file_handler", "file_complete"], "note": "VFS/FUSE 能识别文件与 inode。" },
+      { "id": "block_path", "label": "块级", "focus": ["block_access", "block_handler", "block_complete"], "note": "Block backend 适合 ext4 与 COW。" },
+      { "id": "pmem_path", "label": "Pmem/DAX", "focus": ["dax_access", "dax_handler", "dax_complete"], "note": "VMM 将已就绪文件范围固定映射到 HVA。" },
+      { "id": "ram_path", "label": "内存恢复", "focus": ["ram_access", "ram_handler", "ram_complete"], "note": "Memory snapshot source 注入或映射 RAM 页。" }
+    ]
+  },
+  "components": [
+    { "id": "file_access", "type": "frontend", "label": "VFS 文件读取", "sublabel": "path + offset", "pos": [55, 90], "size": [175, 62] },
+    { "id": "file_handler", "type": "backend", "label": "FUSE / Image Index", "sublabel": "chunk/span lookup", "pos": [430, 90], "size": [185, 62] },
+    { "id": "file_complete", "type": "database", "label": "Chunk Cache + Reply", "sublabel": "解压与校验", "pos": [830, 90], "size": [190, 62] },
+    { "id": "block_access", "type": "frontend", "label": "Guest Block I/O", "sublabel": "sector range", "pos": [55, 285], "size": [175, 62] },
+    { "id": "block_handler", "type": "backend", "label": "NBD / Block Layer", "sublabel": "parent + COW", "pos": [430, 285], "size": [185, 62] },
+    { "id": "block_complete", "type": "database", "label": "Block Cache + Complete", "sublabel": "读 lower / 写 upper", "pos": [830, 285], "size": [190, 62] },
+    { "id": "dax_access", "type": "frontend", "label": "DAX HVA Fault", "sublabel": "pmem offset", "pos": [55, 480], "size": [175, 62] },
+    { "id": "dax_handler", "type": "backend", "label": "VMM UFFD Handler", "sublabel": "FETCH + recvFD", "pos": [430, 480], "size": [185, 62] },
+    { "id": "dax_complete", "type": "database", "label": "File Remap + Wake", "sublabel": "MAP_FIXED range", "pos": [830, 480], "size": [190, 62] },
+    { "id": "ram_access", "type": "frontend", "label": "Guest RAM Fault", "sublabel": "memory page", "pos": [55, 675], "size": [175, 62] },
+    { "id": "ram_handler", "type": "backend", "label": "Restore UFFD / Postcopy", "sublabel": "snapshot lookup", "pos": [430, 675], "size": [185, 62] },
+    { "id": "ram_complete", "type": "database", "label": "Install Page + Wake", "sublabel": "copy / memfd / map", "pos": [830, 675], "size": [190, 62] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "文件级：Nydus / stargz / SOCI", "wraps": ["file_access", "file_handler", "file_complete"], "pad": 16 },
+    { "kind": "region", "label": "块级：OverlayBD / NBD", "wraps": ["block_access", "block_handler", "block_complete"], "pad": 16 },
+    { "kind": "region", "label": "Pmem/DAX：Nydus UFFD / 当前目标", "wraps": ["dax_access", "dax_handler", "dax_complete"], "pad": 16 },
+    { "kind": "region", "label": "内存恢复：Firecracker / CH / QEMU / CRIU", "wraps": ["ram_access", "ram_handler", "ram_complete"], "pad": 16 }
+  ],
+  "connections": [
+    { "from": "file_access", "to": "file_handler", "label": "文件语义", "variant": "emphasis" },
+    { "from": "file_handler", "to": "file_complete", "label": "HTTP Range" },
+    { "from": "block_access", "to": "block_handler", "label": "块请求", "variant": "emphasis" },
+    { "from": "block_handler", "to": "block_complete", "label": "remote/local blocks" },
+    { "from": "dax_access", "to": "dax_handler", "label": "UFFD event", "variant": "emphasis" },
+    { "from": "dax_handler", "to": "dax_complete", "label": "SCM_RIGHTS FD", "variant": "security" },
+    { "from": "ram_access", "to": "ram_handler", "label": "missing page", "variant": "emphasis" },
+    { "from": "ram_handler", "to": "ram_complete", "label": "page source" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "语义层级", "items": ["文件级知道 inode 与 path", "块级只知道 sector", "UFFD 只知道注册 HVA 与 fault address"] },
+    { "dot": "violet", "title": "完成动作", "items": ["FUSE reply 与 block completion结束 I/O", "Pmem 可通过 file remap 避免匿名页 copy", "RAM restore 常使用 copy、memfd 或 postcopy"] },
+    { "dot": "rose", "title": "不能混用", "items": ["同为 UFFD 不代表同一 snapshot identity", "只读 EROFS lower 不承载 ext4 journal", "rootfs cache 不保存 Guest RAM"] }
+  ]
+}

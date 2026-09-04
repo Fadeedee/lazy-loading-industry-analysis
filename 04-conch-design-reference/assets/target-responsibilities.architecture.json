@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Conch + lazyd + StratoVirt 目标职责",
+    "locale": "zh-CN",
+    "viewBox": [1380, 860],
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "control", "label": "控制面", "focus": ["user", "conch", "containerd", "lazyd", "registry"], "note": "Conch 选择资源，containerd 管 metadata，lazyd 准备内容。" },
+      { "id": "fault", "label": "数据面", "focus": ["guest", "kvm", "stratovirt", "lazyd", "cache"], "note": "Guest DAX fault 由 StratoVirt 转成 lazyd FETCH。" },
+      { "id": "guest_mount", "label": "Guest 组装", "focus": ["guestd", "guest", "stratovirt"], "note": "guestd 识别稳定 pmem ID 并挂载 EROFS+DAX。" }
+    ]
+  },
+  "components": [
+    { "id": "user", "type": "external", "label": "用户 / SDK", "sublabel": "Template + Sandbox API", "pos": [45, 130], "size": [155, 64] },
+    { "id": "conch", "type": "backend", "label": "Conch", "sublabel": "编排、资源图、生命周期", "pos": [310, 130], "size": [185, 70], "tag": "owner: orchestration" },
+    { "id": "containerd", "type": "database", "label": "containerd Stores", "sublabel": "Boot Index / Template / Sandbox", "pos": [585, 70], "size": [195, 72], "tag": "metadata owner" },
+    { "id": "registry", "type": "cloud", "label": "OCI Registry", "sublabel": "EROFS descriptors + ranges", "pos": [1080, 70], "size": [180, 68] },
+    { "id": "lazyd", "type": "backend", "label": "lazyd", "sublabel": "prepare、校验、range、FD", "pos": [825, 240], "size": [190, 72], "tag": "content owner" },
+    { "id": "cache", "type": "database", "label": "Sparse EROFS Cache", "sublabel": "digest + bitmap + instance", "pos": [1080, 330], "size": [190, 72] },
+    { "id": "stratovirt", "type": "backend", "label": "StratoVirt", "sublabel": "HVA、memslot、UFFD、remap", "pos": [545, 440], "size": [205, 76], "tag": "VMM owner" },
+    { "id": "kvm", "type": "security", "label": "KVM / Memslot", "sublabel": "GPA -> HVA", "pos": [560, 625], "size": [175, 66] },
+    { "id": "guest", "type": "frontend", "label": "Guest Kernel", "sublabel": "virtio-pmem + EROFS+DAX", "pos": [300, 625], "size": [190, 70] },
+    { "id": "guestd", "type": "frontend", "label": "guestd", "sublabel": "设备匹配与 rootfs 组装", "pos": [45, 625], "size": [185, 70] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Host 控制面与内容服务", "wraps": ["conch", "containerd", "registry", "lazyd", "cache"], "pad": 20 },
+    { "kind": "security-group", "label": "VMM / KVM 地址空间", "wraps": ["stratovirt", "kvm"], "pad": 16 },
+    { "kind": "region", "label": "Guest VM", "wraps": ["guest", "guestd"], "pad": 18 }
+  ],
+  "connections": [
+    { "from": "user", "to": "conch", "label": "Template / Sandbox 请求", "variant": "emphasis", "labelAt": [255, 214] },
+    { "from": "conch", "to": "containerd", "label": "持久 metadata + GC refs", "labelAt": [540, 66] },
+    { "from": "conch", "to": "lazyd", "label": "Prepare EROFS descriptors", "variant": "emphasis" },
+    { "from": "registry", "to": "lazyd", "label": "Bearer + HTTP Range" },
+    { "from": "lazyd", "to": "cache", "label": "data sync -> bitmap ready", "labelAt": [1048, 326] },
+    { "from": "conch", "to": "stratovirt", "label": "typed lazy pmem args", "variant": "emphasis" },
+    { "from": "stratovirt", "to": "lazyd", "label": "FETCH / SCM_RIGHTS", "variant": "security" },
+    { "from": "cache", "to": "stratovirt", "label": "cache FD + ready range", "variant": "security" },
+    { "from": "stratovirt", "to": "kvm", "label": "register HVA memslot", "route": "straight", "fromSide": "bottom", "toSide": "top", "labelAt": [648, 550] },
+    { "from": "kvm", "to": "guest", "label": "virtio-pmem GPA", "labelAt": [523, 709] },
+    { "from": "guestd", "to": "guest", "label": "mount ro,dax + overlay", "variant": "emphasis", "labelAt": [265, 709] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "单一 Owner", "items": ["Conch 管资源关系", "lazyd 管不可变内容", "StratoVirt 管地址空间与 fault"] },
+    { "dot": "emerald", "title": "共享边界", "items": ["containerd 保护 metadata closure", "lazyd 以 digest 复用 cache", "每个 VM 仍有独立 GPA/HVA/memslot"] },
+    { "dot": "rose", "title": "禁止越界", "items": ["Conch 不读 bitmap", "lazyd 不管理 vCPU", "StratoVirt 不解析 OCI Boot Index"] }
+  ]
+}

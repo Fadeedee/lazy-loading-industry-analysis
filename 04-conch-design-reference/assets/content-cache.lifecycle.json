@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "内容身份、实例引用与缓存生命周期",
+    "locale": "zh-CN",
+    "viewBox": [920, 760],
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "content", "label": "内容主线", "focus": ["declared", "preparing", "partial", "in_use", "idle"], "note": "同一 digest 在准备、部分就绪、映射使用和空闲之间流转。" },
+      { "id": "runtime", "label": "运行引用", "focus": ["partial", "fault_wait", "in_use", "vm_ref", "idle"], "note": "每个 VM 有独立 fault 和 mapping，但共享内容缓存。" },
+      { "id": "recovery_gc", "label": "失败与回收", "focus": ["partial", "fault_wait", "gc_check", "deleted", "failed"], "note": "失败保持 not-ready；GC 必须等待所有引用消失。" }
+    ]
+  },
+  "lanes": [
+    { "id": "main", "label": "lazyd 内容对象" },
+    { "id": "runtime", "label": "VM / 请求引用" },
+    { "id": "control", "label": "恢复与 GC" },
+    { "id": "terminal", "label": "终态" }
+  ],
+  "states": [
+    { "id": "declared", "type": "start", "label": "Descriptor 已声明", "sublabel": "canonical digest", "lane": "main", "col": 0, "step": "01" },
+    { "id": "preparing", "type": "active", "label": "Preparing", "sublabel": "sparse + bitmap + instance", "lane": "main", "col": 1, "step": "02" },
+    { "id": "partial", "type": "waiting", "label": "Partially Ready", "sublabel": "部分 range 已持久化", "lane": "main", "col": 2, "step": "03" },
+    { "id": "in_use", "type": "active", "label": "Mapped / In Use", "sublabel": "一个或多个 VM", "lane": "main", "col": 3, "step": "04" },
+    { "id": "idle", "type": "neutral", "label": "Cached Idle", "sublabel": "保留供后续复用", "lane": "main", "col": 4, "step": "05" },
+    { "id": "fault_wait", "type": "waiting", "label": "Fault Waiters", "sublabel": "同 range fan-out", "lane": "runtime", "col": 0, "tag": "inflight" },
+    { "id": "vm_ref", "type": "active", "label": "VM References", "sublabel": "FD + VMA + metadata ref", "lane": "runtime", "col": 1, "tag": "lease" },
+    { "id": "gc_check", "type": "decision", "label": "GC Eligibility", "sublabel": "无 VM / Template / inflight 引用", "lane": "control", "col": 2, "tag": "policy" },
+    { "id": "failed", "type": "failure", "label": "Fetch Failed", "sublabel": "ready 保持 false", "lane": "terminal", "col": 0, "tag": "recoverable" },
+    { "id": "deleted", "type": "success", "label": "Cache Deleted", "sublabel": "安全释放数据与 bitmap", "lane": "terminal", "col": 2, "tag": "terminal" }
+  ],
+  "transitions": [
+    { "from": "partial", "to": "fault_wait", "variant": "emphasis", "route": "straight", "fromSide": "bottom", "toSide": "top" },
+    { "from": "fault_wait", "to": "failed", "variant": "security", "route": "straight", "fromSide": "bottom", "toSide": "top" },
+    { "from": "failed", "to": "partial", "label": "有界重试", "variant": "dashed", "route": "left-channel", "channelX": 324, "labelAt": [324, 350] },
+    { "from": "in_use", "to": "vm_ref", "variant": "emphasis", "route": "straight", "fromSide": "bottom", "toSide": "top" },
+    { "from": "idle", "to": "gc_check", "variant": "dashed", "route": "straight", "fromSide": "bottom", "toSide": "top" },
+    { "from": "gc_check", "to": "deleted", "variant": "security", "route": "straight", "fromSide": "bottom", "toSide": "top" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Canonical Identity", "items": ["digest 决定内容对象", "image ref、layer index、VM ID 不改变 cache identity", "instance_id 是 opaque prepared-content identity"] },
+    { "dot": "amber", "title": "Ready 承诺", "items": ["先写完整 range 并同步 cache", "再设置并同步 bitmap", "失败和重启不能把洞误判为正确数据"] },
+    { "dot": "rose", "title": "回收条件", "items": ["单 VM 退出只释放自己的 FD/VMA", "Template、Sandbox 和 inflight 都可能持有引用", "无 lease 阶段默认保守保留 cache"] }
+  ]
+}
