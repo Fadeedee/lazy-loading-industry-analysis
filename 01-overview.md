@@ -146,6 +146,8 @@ Conch PR #155 与 StratoVirt PR #2017 若按当前方向合入，可提供 incre
 
 ## 尚需实验决定
 
+网络感知预取已纳入后续设计：保持 bitmap 基础单位固定，由 lazyd 根据近期延迟、吞吐、连续访问和预取利用率调整后台窗口；当前缺页范围就绪立即返回，首次请求慢不会直接触发扩大下载。该能力尚未实现，先验证有界顺序预取，再加入自适应反馈，详见 [缓存、去重与预取比较](03-design-comparison/06-cache-dedup-and-prefetch.md)。
+
 | 决策 | 必测指标 |
 | --- | --- |
 | `MAP_PRIVATE` 或 `MAP_SHARED` | 双 VM PSS、page cache 共享、写保护、VMA 行为 |

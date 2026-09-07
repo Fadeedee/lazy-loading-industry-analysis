@@ -52,4 +52,14 @@ cache key 严格接受 canonical SHA256，`instance_id = erofs-<cache_key>`，�
 
 ## 后续扩展
 
+### 自适应预取
+
+建议由 `RangeCoordinator` 管理前台需求与后台预取，两者共享 bitmap、inflight 去重和 data-before-ready 顺序。前台所需范围就绪即返回 FD，不等待预测范围；前台命中预取任务时复用并提升优先级。后台预取失败只影响预测任务，不能污染 ready 状态。
+
+保留固定 `fetch.unit_bytes`，动态调整预取单位数和并发。结合近期延迟、吞吐、连续访问和预取利用率调整窗口，不因首次请求慢就扩大下载。配置集中在 lazyd，窗口、并发和带宽均有上限，拥塞时收缩或暂停；不需要修改 FETCH v1 或要求 StratoVirt 增加 PROBE。
+
+这是待实现增强，先做关闭/开启可对比的顺序预取，再引入网络反馈。详细策略、v1 访问流限制和验收矩阵见 [缓存、去重与预取比较](../03-design-comparison/06-cache-dedup-and-prefetch.md)。
+
+### 其他数据对象
+
 lazyd 可以增加新的 immutable object type或 block-diff source，但要使用明确版本化 schema。guest RAM source优先由 StratoVirt/conch-cow 管理，不应因为同样按 range 读取就强行并入 EROFS instance。

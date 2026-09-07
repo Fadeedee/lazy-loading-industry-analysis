@@ -71,6 +71,18 @@
 4. 加 lease/refcount、cache prune和跨节点分发；
 5. 做 fault优先级和全局 I/O budget。
 
+## 可独立推进的增强：网络感知预取
+
+在阶段 4 建立无预取性能基线后推进，不作为 rootfs 正确性首版的合入前置：
+
+1. 补齐首字节/传输/排队时间、吞吐、预取利用率观测。
+2. 实现有上限、可关闭的顺序预取，保持固定 bitmap unit 和现有 FETCH v1。
+3. 保证前台当前范围就绪即返回；后台任务共享 inflight，支持前台等待者提升优先级。
+4. 加入基于近期样本的窗口扩大/收缩，限制后台请求大小、并发和带宽。
+5. 通过隔离的测试代理或 network namespace 对比高延迟、限带宽、抖动和随机访问，验证应用可用时间、首次请求、fault p99 与下载放大。
+
+先由 lazyd 约束 rootfs 下载预算；checkpoint 三路共存后，再由 Conch 协调各后端预算，避免内存恢复、块读取和 rootfs 预取相互挤占。策略详见 [自适应预取建议](../03-design-comparison/06-cache-dedup-and-prefetch.md)。
+
 ## 合入顺序
 
 推荐 `lazyd -> StratoVirt -> Conch -> E2E/benchmark`。每个仓可以一个完整 PR，但 commit必须按逻辑拆分；评审中不要用“后续 commit会修”掩盖当前 commit的错误路径。
