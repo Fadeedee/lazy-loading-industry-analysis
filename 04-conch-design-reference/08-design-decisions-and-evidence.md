@@ -1,154 +1,176 @@
-# 设计决策与业界依据
+# 从用户场景推导三仓方案
 
-> 阅读完成后，读者能够逐项说明我们准备怎样设计、参考项目具体做了什么、参考资料在哪里，以及哪些细节仍是本项目的待验证建议。
+> 不从某个 API 开始。先问一次启动或恢复要解决什么，再比较业界做法，决定三个仓共同承担哪些改动。
 
-本文于 **2026-09-08 重新核查**以下八项决策涉及的第一方文档、关键源码和 PR 状态，版本见 [来源清单](../appendix/source-inventory.md)。这是证据核查，不是重新运行产品测试或端到端验证；下文“验收”均为后续执行条件，“我们的设计”表示目标，不表示已在当前上游实现。未涉及的产品章节仍保留原核查日期。
+本文是 2026-09-08 的设计建议。上游事实见[核查基线](01-current-system-boundary.md)；产品证据保留[来源清单](../appendix/source-inventory.md)中的核查版本。本次没有新增产品测试或性能数字。
 
-## 阅读索引
+## 先看设计主线
 
-| 我们的设计问题 | 主要参考 | 本文章节 |
+**准备镜像或快照 → 创建或恢复沙箱 → 按需访问 → 保存快照 → 停止与回收。**
+
+我们希望业务更早可用，不是只让 pull 更快。以下八项分别说明建议、替代方案、证据及验证；接口名和进程数尚未冻结。
+
+| 用户遇到的问题 | 从哪里看 |
+| --- | --- |
+| 镜像太大，必须全下载才能启动吗 | 第 1 节 |
+| 同一镜像运行多台 VM，能共享什么 | 第 2、3 节 |
+| 下载中断或缓存损坏，会读错吗 | 第 4 节 |
+| 网络慢，按需读取反而更慢怎么办 | 第 5 节 |
+| 文件和内存快照怎样恢复 | 第 6、7 节 |
+| 失败、删除和回收归谁管 | 第 8 节 |
+
+## 1. 创建一个沙箱：哪些资源需要先准备？
+
+### 场景与建议
+
+用户指定一个 Template，Conch 需要知道“要启动哪个版本、需要哪些设备、哪些内容必须先到位”。建议先形成**资源计划**：只读镜像、磁盘历史层、内存快照和设备状态分别是什么，每项使用完整准备还是按需准备。
+
+这不是给所有对象统一加一个 lazy 开关。小镜像可以完整取回；大镜像可以按需；内存来源是否支持远端读取另行协商。索引和关键启动状态必须足够完整，才能判断后续读取位置。
+
+### 对方做了什么
+
+[Kata Nydus 集成设计](https://github.com/kata-containers/kata-containers/blob/26c2e1630457977d931bce0527c4df92a3b8f15d/docs/design/kata-nydus-design.md)把 mount metadata 从 host 传给运行时和 guest，由 guest 组装文件系统。[E2B 架构](https://github.com/e2b-dev/infra/blob/cc7c574233ad98665a7c72a3d37b0af89ae79a71/docs/ARCHITECTURE.md)则将磁盘和内存恢复放在同一个沙箱操作里。两者说明“提供数据”与“把资源组合成可运行沙箱”是不同职责。[SRC-KATA-003] [SRC-E2B-001]
+
+详细过程见 [Kata](../02-products/11-kata-and-dragonball/01-data-path.md)和 [E2B](../02-products/12-e2b-and-firecracker-stacks/01-data-path.md)。
+
+### 三仓怎样协作
+
+Conch 解析用户意图、组织资源引用和失败回滚；lazyd 或已有数据源适配器准备内容；StratoVirt 报告设备/内存接入能力。guestd 负责 guest 内的设备匹配与挂载。
+
+可以在 Conch 原生 BootPreparer 增加按需 source，也可以借助现有 snapshotter/mount 契约。选择取决于谁真实管理相应资源；不能为了走通接口而宣称未就绪数据已经完整 unpack，也不预先排除语义真实的 snapshotter 方案。
+
+**验证：** selective pull 不完整取回目标 payload；元数据缺失会失败；准备中取消不发布“可启动”；普通启动行为保持正确。
+
+## 2. 两台 VM 用同一镜像：先复用内容，再管理使用关系
+
+### 场景与建议
+
+VM1 下载了一个库，VM2 应在授权允许时直接复用。缓存身份要描述**哪份内容**，而不是“哪台 VM 的第几层”。
+
+建议分清三种身份：不可变内容、某次磁盘/内存快照视图、某个运行 attachment。具体字段名可重新设计；同一摘要也不能绕过授权或忽略格式、大小冲突。
+
+### 对方做了什么
+
+[Nydus 镜像设计](https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/docs/nydus-design.md)用 metadata 定位 chunk/blob。[SOCI zTOC](https://github.com/awslabs/soci-snapshotter/blob/238af848f32fcb887072c144b09ee65a3a895f9c/docs/glossary.md)保存文件位置和压缩流检查点，让读者定位可独立处理的范围。共同点是把读取位置绑定到确定内容，不依赖可变 tag；并不是双方都有同名 prepare API。[SRC-NYDUS-001] [SRC-SOCI-004]
+
+### 三仓怎样协作
+
+Conch 保存可跨节点使用的资源描述与授权引用；lazyd 管内容索引和本地缓存；StratoVirt 使用本次 attachment 提供的逻辑布局，不解析镜像 tag。
+
+可以按整 blob、chunk 或组合 artifact 缓存。若使用可映射文件，共享物理页还要求映射到同一实际文件页；两个相同 digest 的独立缓存文件不会自动共享 page cache。
+
+**验证：** 不同 Template/VM 引用相同内容不重复取数；越权访问被拒绝；节点迁移不依赖另一台机器的 socket、FD 数字或缓存路径。
+
+## 3. 第一次读文件：谁接缺页，怎样把数据交给 VM？
+
+### 先看两个独立选择
+
+以两台 VM 读取 Python 为例。“下载一次”只说明网络复用；若再复制进各自的匿名内存，仍可能占多份物理页。
+
+要进一步共享文件页，可以采用 pmem/DAX 路径；也可以用块设备供应整盘，换取更统一的读写快照管理。我们优先验证前者的共享收益，同时保留后者作为端到端成本对照，不预设 pmem 一定更快。
+
+选了 UFFD 后，还要分别决定：
+
+| 决策 | 候选 A | 候选 B |
 | --- | --- | --- |
-| 谁解析镜像、谁管理运行资源 | Conch 原生 stores、Kata | 1 |
-| 如何识别和复用只读内容 | Nydus、SOCI | 2 |
-| 缺页后如何共享文件页 | Nydus UFFD service | 3 |
-| 哪些范围真正 ready | 当前 lazyd、Nydus chunk 校验 | 4 |
-| 网络慢时如何预取 | QEMU、stargz、Nydus | 5 |
-| 可写磁盘快照如何恢复 | E2B、OverlayBD | 6 |
-| Guest RAM 如何按需恢复 | Firecracker、Cloud Hypervisor、Conch 增量恢复 | 7 |
-| 如何统一恢复与回收 | E2B、Conch stores | 8 |
+| 谁接内核缺页事件 | StratoVirt 内部 handler | 外部 handler，可放在 lazyd 的类型化适配层 |
+| 怎样完成当前页 | COPY 到 VM 私有目标页 | 文件 FD + 映射，由 VMM 替换自己的地址区间 |
 
-## 1. Conch 管资源关系，lazyd 接收明确的内容描述
+handler 外置，不意味着外部进程能直接对 StratoVirt 的 HVA 执行普通 mmap。选择文件映射时，VMM 仍需执行或严格控制自身地址空间的修改。
 
-**我们的设计。** Conch 解析 Boot Index，选择 rootfs EROFS descriptors，调用 lazyd prepare，并把准备结果关联到 Template/Sandbox 的资源引用。lazyd 负责内容准备与 FETCH；StratoVirt 消费明确的 lazy pmem source。当前不引入 fanotify。
+### Nydus 具体做了什么
 
-**参考位置。** [Conch PR #184](https://gitcode.com/openeuler/Conch/pull/184) 及其 [store.go](https://gitcode.com/openeuler/Conch/blob/ae1e29ad8f07ad1838a6c4300ac0c8754c655066/internal/adapters/containerd/sandbox/store.go)、[Kata Nydus 集成设计](https://github.com/kata-containers/kata-containers/blob/26c2e1630457977d931bce0527c4df92a3b8f15d/docs/design/kata-nydus-design.md)。[SRC-CONCH-002] [SRC-KATA-003]
+[Nydus block_uffd.rs](https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/service/src/block_uffd.rs)在握手时接收 VMM 的 UFFD FD 和区域描述，再直接读取内核缺页事件。服务定位镜像逻辑范围，补齐缓存，可走复制填页，也可把文件区域交回 VMM。[block_device.rs](https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/service/src/block_device.rs)负责逻辑块到后端数据的定位。[SRC-NYDUS-005] [SRC-NYDUS-007]
 
-**对方具体做了什么。** Conch #184 将 Sandbox metadata 纳入 containerd store，并维护 Boot Index/runtime snapshot 的 GC 引用，让运行实例与所需资源的持久关系有统一 owner。Kata 的 Nydus 集成通过 snapshotter 提供 mount metadata，再由 runtime/shim 向 guest 传递和组装；镜像内容服务与 sandbox 生命周期各有职责。这两项共同提供的参考是：内容读取能力可以外置，但运行时必须知道正在使用哪份资源，并负责把挂载信息送到正确的 guest。
+[uffd_proto.rs](https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/service/src/uffd_proto.rs)的映射描述默认 READ + PRIVATE + FIXED；实际 mmap 由客户端完成。干净的 PRIVATE 文件页也能共享，因此不能只凭 SHARED 这个名字选标志。[SRC-NYDUS-006]
 
-具体到接入点：Conch 的 `Store.Create/Update` 写入 Sandbox extension，并维护 `containerd.io/gc.ref.content.boot-index` 和 snapshot 引用。Kata 这份设计则描述将 RAFS source/config/snapshotdir 编入 mount `extraoption`，由 shim 解析并让 guest 组合 RAFS lower 与共享 upper/workdir。后者是仓库中的集成设计文档，不能仅凭它推定所有当前 Kata runtime 都走同一实现。
+详见 [Nydus 数据路径](../02-products/01-nydus-v2/01-data-path.md)和 [Copy/映射比较](../03-design-comparison/05-copy-vs-shared-mapping.md)。
 
-**我们怎样采用。** 复用 Conch 当前 store 和 BootPreparer 分层，将 lazy rootfs 建模为显式资源。Kata 的 mount metadata 传递是职责参考，不直接搬用其 snapshotter 或 guest 协议。准备失败时不发布可用 Template。
+### 我们先验证哪条？
 
-**状态与验收。** GitCode API 确认 #184 于 2026-09-03 合入。后续测试 prepare 失败不发布、资源引用重启后可恢复、普通完整启动不受影响；GC 引用不等于 lazyd 已实现外部缓存租约。
+**先做外部 handler 的最小原型，并以内置 handler 为对照。** 理由是 StratoVirt 上游已经有 RAM 的外部 UFFD 交接机制，可评估复用；这不是已证明 pmem 可直接套用。权限、连接中断、事件代次、remap 完成通知和就绪条件都要补足。
 
-进一步阅读：[当前代码与接入点](01-current-system-boundary.md)、[Conch 职责](03-conch-responsibilities.md)、[Kata 生命周期分析](../02-products/11-kata-and-dragonball/02-cache-snapshot-lifecycle.md)。
+Conch 管 attachment 生命周期；lazyd 可增加独立于内容核心的 UFFD 适配模块；StratoVirt 管内存区域、接收已就绪文件范围、校验和完成映射。若外置方式明显扩大故障范围或协议复杂度，再选择内部 handler，不为复用而强行外置。
 
-## 2. 用内容摘要复用缓存，按 descriptor 准备
+VM2 仍有自己的地址和首次缺页。数据已缓存时不需再下载，但它仍需建立自己的映射。**共享内容不等于自动同步所有 VM 的页表。**
 
-**我们的设计。** lazyd 以严格校验的 blob digest 标识 EROFS 内容；不同 image ref、layer index 和 VM 可引用同一 cache/bitmap/instance。`instance_id` 保持 prepared-content identity，StratoVirt 将它当 opaque ID。租户授权策略需独立校验，内容相同不自动意味着可跨安全域共享。
+### 必须测什么
 
-**参考位置。** [Nydus 镜像设计](https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/docs/nydus-design.md)、[SOCI zTOC/span 定义](https://github.com/awslabs/soci-snapshotter/blob/238af848f32fcb887072c144b09ee65a3a895f9c/docs/glossary.md)、[SOCI v1/v2 边界说明](https://github.com/awslabs/soci-snapshotter/blob/238af848f32fcb887072c144b09ee65a3a895f9c/README.md#no-image-conversion)。[SRC-NYDUS-001] [SRC-SOCI-004] [SRC-SOCI-001]
+对照完整镜像读取内容；测试尾页与对齐补零；验证只读权限、整段映射及唤醒、相邻未处理页、并发事件、超时和 handler 崩溃。两 VM 同时读时同时观察远端字节和 PSS，不能只看 RSS 求和。
 
-**对方具体做了什么。** Nydus 将文件系统 metadata 与 data blob 分离：metadata 描述 inode、文件偏移和 chunk/blob 位置，读取时定位所需内容，chunk 校验能力的生效条件见第 4 节。SOCI 的 zTOC 包含文件在解压后 TAR 中的位置，以及压缩流各检查点的解压状态；运行时由文件范围定位可独立解压的 span，无需从压缩流开头完整解压。SOCI README 特别区分 v1 的外置索引与 v2 的构建期转换，不能概括成所有 SOCI 模式都完全不改镜像。两者都需要把内容位置绑定到确定的镜像数据，不能只依赖可变 tag。
+<details>
+<summary>地址与协议细节：按需展开</summary>
 
-**我们怎样采用。** 借鉴稳定内容身份和索引驱动取数。我们的输入已是原生 EROFS descriptor，cache 以 EROFS 文件偏移组织，因此不引入 RAFS bootstrap 或 zTOC。descriptor-based prepare 是结合现有职责得出的本项目接口选择，不声称复制了对方同名 API。
+HVA 是 VMM 的宿主机虚拟地址，GPA 是 guest 物理地址。缺页地址要经过区域布局转换成内容偏移，不一定永远等于单一文件的 `fault_hva - base_hva`；组合设备或增量层可能需要额外索引。
 
-**验收。** 同 digest、不同 image ref/index/VM 返回相同内容身份和缓存路径；digest 非法或同身份的 size/unit 配置冲突应明确失败；相同内容不能绕过调用方授权。共享 inode/文件页需另测，不能从 digest 相同直接推导物理页已共享。
+UFFD FD 是缺页通知/处理句柄，缓存文件 FD 是数据访问句柄。它们可通过 SCM_RIGHTS 传递，但生命周期和权限不同。
 
-进一步阅读：[Nydus 读取路径](../02-products/01-nydus-v2/01-data-path.md)、[SOCI 读取路径](../02-products/04-soci/01-data-path.md)、[缓存身份概念](../00-concepts/03-cache-sharing-and-identity.md)。
+`mmap(MAP_FIXED)` 会替换 VMA 子区间，必须检查文件类型、大小、偏移、范围、对齐、映射存活期和 UFFD wake/resolve 行为；队列中重复或过期事件也必须有规则。普通 sparse 文件 mmap 不能将“未下载”区别于零，需真正的缺失数据拦截机制。
 
-## 3. UFFD 触发取数，FD 映射共享文件页
+[Nydus #1921](https://github.com/dragonflyoss/nydus/pull/1921)是已合入服务端证据；[Firecracker #5740](https://github.com/firecracker-microvm/firecracker/issues/5740)是提案与作者原型报告；[CH #8239](https://github.com/cloud-hypervisor/cloud-hypervisor/pull/8239)截至来源记录日期关闭未合入。不能将它们等同于本项目已完成的实现或测试。[SRC-NYDUS-004] [SRC-FC-004] [SRC-CH-002]
 
-**我们的设计。** StratoVirt 创建 anonymous/reserved HVA，注册 memslot 和 UFFD missing，启动 handler 后才允许 guest 访问。handler 将缺页地址换算为 offset，向 lazyd FETCH。lazyd 返回 cache FD 与完整 ready range；StratoVirt 校验后执行 fixed remap，再完成 wake。纯 padding 走零页处理。
+</details>
 
-**参考位置。** [Nydus PR #1921](https://github.com/dragonflyoss/nydus/pull/1921)、[`UffdCore::handle_page_fault` / `UffdWorker::handle_conn`](https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/service/src/block_uffd.rs)、[`BlockDevice::fetch_ranges`](https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/service/src/block_device.rs)、[`HandshakeRequest` / `VmaRegion`](https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/service/src/uffd_proto.rs)。[SRC-NYDUS-004] [SRC-NYDUS-005] [SRC-NYDUS-006] [SRC-NYDUS-007]
+## 4. 下载到一半断电：什么才叫“可读”？
 
-**对方具体做了什么。** VMM 在握手时传入 **UFFD FD 和 VMA regions**，Nydus 持有该 FD 并直接监听内核缺页事件，并非 VMM 每次发送 FETCH。`handle_page_fault` 用 `region.offset + fault_hva - base_hva` 定位 flattened block offset；`fetch_ranges` 再区分 metadata blob、data blob 和逻辑 hole。data blob 未就绪时先 `async_fetch`，随后返回 FD、blob offset、长度和逻辑 block offset。
+建议把临时下载、完成校验、当前可读、可持久复用区分清楚。如果 ready 记录用于重启后跳过下载，它必须晚于相应数据持久化。
 
-Copy 分支由 Nydus 读取内容后 `UFFDIO_COPY`；Zerocopy 分支通过 SCM_RIGHTS 返回文件 FD/范围，映射由 VMM 客户端完成。逻辑 hole 和设备外区域由 Nydus zero 处理。可选 `enable_prefault` 在握手后异步调用 `fetch_ranges(..., probe_only=true)` 推送 ready 范围，**不是远端预取，也不构成“所有范围在 vCPU 启动前已映射”的屏障**。
+[Nydus validate_chunk_data](https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/storage/src/cache/mod.rs)检查长度并按配置/格式决定校验；CRC 不等于密码学摘要。[lazyd 样本](https://github.com/Fadeedee/lazyd/blob/751d647fb37fa2e01f6fb1784003e8b26aa00244/src/instance.rs)已有先 cache sync、再 bitmap ready/sync 的顺序。这些分别是校验和持久化证据，不能混为一谈。[SRC-NYDUS-008] [SRC-LAZYD-001]
 
-这里的 hole 来自镜像逻辑块视图，不是“本地 sparse cache 尚未下载”的洞；后者必须先取数，不能当作合法零数据交给 guest。
+可选持久 bitmap，也可使用原子发布的分块文件或日志索引。选择根据同步成本、并发、掉电恢复和格式兼容决定，不先固定 bitmap 格式。SEEK_DATA/HOLE 只能发现明显洞；任意 range 的强校验需要可信局部摘要等依据。
 
-**我们怎样采用。** 采用文件 FD 加范围描述的供数方式，但 handler 留在 StratoVirt，lazyd 不持有 VMM 的 UFFD。原生 EROFS cache 的 offset 关系也不同于 Nydus flattened RAFS view。FETCH v1 保持自己的契约，首版不引入 PROBE。每个 VM 仍独立处理自己的 fault 和 VMA，共享的是后端文件页。
+Conch 只接收清楚的准备状态；内容服务负责数据正确性；StratoVirt 不映射未经承诺的缺失范围。可批量同步，但不能让持久 ready 领先数据。
 
-**成熟度与验证。** 本次 API 核验：#1921 已合入；[Firecracker #5740](https://github.com/firecracker-microvm/firecracker/issues/5740) 仍是开放提案，作者报告了原型，但不等于上游支持；[Cloud Hypervisor #8239](https://github.com/cloud-hypervisor/cloud-hypervisor/pull/8239) `merged=false`，不能当上游运行时依赖。Nydus `VmaRegion` 的默认值为 `PROT_READ` 和 `MAP_PRIVATE|MAP_FIXED`，这是协议 region 的默认配置，实际 remap 标志仍由客户端实现决定，不能称为 Nydus 服务端执行了该 mmap。[SRC-FC-004] [SRC-CH-002]
+**验证：** 部分写入、同步失败、重开文件、重启、缓存损坏及错误响应。常规单测不能代替真实掉电测试。
 
-后续分别验证映射权限与 KVM 只读保护、完整 ready range remap/wake、相邻未映射页、重复响应、尾页和双 VM PSS。Nydus fault loop 有处理失败后仅 `warn!` 的分支，不能据此假定已经具备我们要求的 VMM 终止闭环；我们的超时和 fatal 上报仍需单独验收。
+## 5. 网络慢：谁决定多拉一点？
 
-进一步阅读：[Nydus UFFD 详细路径与差异](../02-products/01-nydus-v2/01-data-path.md)、[Copy 与共享映射](../03-design-comparison/05-copy-vs-shared-mapping.md)、[StratoVirt 职责](05-stratovirt-responsibilities.md)。
+用户关心“多久能用”，不关心下载服务是否提前返回。建议分别验证三种优化：启动工作集预取、根据访问反馈调整窗口、提前映射已经缓存的范围。
 
-## 4. ready 是数据承诺，洞检测不是内容校验
+[eStargz](https://github.com/containerd/stargz-snapshotter/blob/c2bf18e5a94dcfd959cabf744f4bbb4ef8d980a2/docs/estargz.md)把 prioritized files 放在 landmark 前，文档描述启动前预取；[QEMU Fast Snapshot Load](https://github.com/qemu/qemu/blob/35500e5c41aec76cde59befe750600dac7a9e37a/docs/devel/migration/fast-snapshot-load.rst)的后台线程用于完成 RAM 恢复，与当前缺页协调页面领取，不是网络预测算法。[SRC-STARGZ-002] [SRC-QEMU-001]
 
-**我们的设计。** 必需范围完整写入 cache 并完成同步后，才能设置并同步 bitmap ready。前后台读取共享 range 状态与 inflight 去重；恢复时保守处理不可信状态。
+Nydus 的 prefault 是握手后异步枚举已缓存范围，不代表预测下载，也不保证启动前全部映射完。[SRC-NYDUS-007]
 
-**参考位置。** [lazyd `ensure_range`](https://github.com/Fadeedee/lazyd/blob/751d647fb37fa2e01f6fb1784003e8b26aa00244/src/instance.rs)、[bitmap ready 写入](https://github.com/Fadeedee/lazyd/blob/751d647fb37fa2e01f6fb1784003e8b26aa00244/src/range_map.rs)、[Nydus `validate_chunk_data`](https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/storage/src/cache/mod.rs)。[SRC-LAZYD-001] [SRC-NYDUS-008]
+建议 Conch 提供场景、截止时间和节点预算，StratoVirt/handler 提供访问或驻留反馈，lazyd 调度下载。可新增必要的协商字段，不因某个协议缺少访问流 ID 就永久放弃该信息。
 
-**对方具体做了什么。** Nydus 的 `validate_chunk_data` 先检查解压长度，再根据 `need_validation()`、CRC32 标记或强制校验参数决定是否检查内容，并有 legacy stargz 例外；`check_digest` 也区分 CRC 与 hash。因此“支持校验”不等于所有后端、配置和格式下每次读取都进行了密码学摘要验证。当前 lazyd 源码则确认有 `write_all_at -> sync_data(cache) -> set_range_ready -> sync_data(bitmap)` 顺序，并将内容身份、大小和 unit 写入 bitmap header。
+单次请求慢可能来自鉴权、连接或拥塞，不能据此无限扩大范围。当前需求优先，后台请求有大小和并发上限；启动前等待预取是单独策略，必须计入启动成本。
 
-**我们怎样采用。** 持久化顺序是我们现有正确性要求，不将其包装成未经源码核对的 Nydus 同款实现。`SEEK_DATA/SEEK_HOLE` 只能检查明显空洞；完整 blob digest 也不能单独验证任意局部 range。若要局部强校验，需要可信分块摘要等额外依据，不能宣称仅有 bitmap 就能检测缓存内容损坏。
+**验证：** full、纯按需、工作集预取和提前映射分别对照；覆盖高延迟、限带宽、随机访问、小镜像和多 VM。详见[网络与预取](../03-design-comparison/06-cache-dedup-and-prefetch.md)。
 
-**验收。** 重开文件与重启恢复、部分写入失败、bitmap 同步失败、并发重叠范围、尾页补零。普通单元测试不能证明真实掉电一致性，需明确故障注入覆盖边界。
+## 6. 恢复写入的文件：分离镜像与磁盘，还是统一整盘？
 
-进一步阅读：[lazyd 当前基础与缺口](04-lazyd-responsibilities.md)、[缓存失败与安全](../03-design-comparison/07-lifecycle-failure-and-security.md)。
+有两条合理候选：只读镜像 pmem + 私有块写层，或整盘块快照 + COW。前者可能节省只读页复制，后者可能减少设备和快照组合复杂度。不要先因“已有 pmem”排除整盘方案。
 
-## 5. 当前缺页优先，预取量按访问与网络反馈调整
+[E2B Overlay](https://github.com/e2b-dev/infra/blob/cc7c574233ad98665a7c72a3d37b0af89ae79a71/packages/orchestrator/pkg/sandbox/block/overlay.go)读取依次检查 writable cache、封存中的 cache 和 base，新写入只进入当前 cache。[OverlayBD](https://github.com/containerd/overlaybd/blob/f63addfd8e51bd9eeecc12f5f4670c281a74d6e8/README.md)提供只读层加可写顶层，并支持提交或切换写层。[SRC-E2B-002] [SRC-OVERLAYBD-001]
 
-**我们的设计。** 当前范围 ready 即返回，预测范围后台处理。固定 bitmap unit，动态调整预取窗口、并发和预算。首次请求慢不直接触发扩大下载。
+借鉴的是“历史内容不变，新写入进入私有状态”，不是直接选定 NBD、TCMU 或某个文件系统。Conch 管快照资源与设备布局；数据后端解释块覆盖和写层；StratoVirt 暴露设备并参与一致性屏障。
 
-**参考位置。** [QEMU Fast Snapshot Load](https://github.com/qemu/qemu/blob/35500e5c41aec76cde59befe750600dac7a9e37a/docs/devel/migration/fast-snapshot-load.rst)、[eStargz 格式与预取](https://github.com/containerd/stargz-snapshotter/blob/c2bf18e5a94dcfd959cabf744f4bbb4ef8d980a2/docs/estargz.md#prioritized-files-and-landmark-files)、[Nydus Prefetch](https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/docs/nydus-design.md)。[SRC-QEMU-001] [SRC-STARGZ-002] [SRC-NYDUS-001]
+**验证：** 先读最高优先级历史块；区分继承与显式零；封存期间没有读空窗；新写入不污染其他 VM。详见[磁盘方案比较](../03-design-comparison/02-writable-upper-and-snapshot.md)。
 
-**对方具体做了什么。** QEMU 的 fault thread 按 mapped-ram offset 直接读本地快照，eager thread 加载其余页面，`pending_bmap` 用于协调页面领取，防止重复装入覆盖运行中的 RAM。eager thread 还负责让恢复最终完成，否则冷页不再访问时可能长期停留在 migration 状态；它不是预测下一次网络访问的算法。
+## 7. 恢复运行内存：本地懒恢复是否足够？
 
-eStargz 在构建时把 prioritized files 放在 `.prefetch.landmark` 之前，文档描述在容器运行前以 HTTP Range 预取该区域。Nydus 的文件/目录 hints 则用于后台预取。本项目“当前 fault 不等预测范围”不能写成 eStargz 原样采用的启动策略；三者提供的是调度、构建期工作集、后台取数三个不同层面的参考。
+快照文件已完整在本地时，内核按需装入页面就能降低初始驻留。但跨节点或冷缓存时，文件的完整下载仍可能最慢。要单独测网络准备与恢复后的缺页时间。
 
-**我们怎样采用。** 将这些思想映射到 lazyd range，而非复制内存页调度代码。延迟、吞吐、连续访问和预取利用率驱动的窗口调整，是本项目待验证建议；不能说这些项目已经实现了我们描述的同一策略。后台请求可能不可抢占，所以必须限制大小和并发，为前台保留容量。
+[Firecracker 外部 handler 文档](https://github.com/firecracker-microvm/firecracker/blob/7699746649826d1dfcdde626b3131bac08f28e0d/docs/snapshotting/handling-page-faults-on-snapshot-resume.md)展示 UFFD FD/layout 交接和 COPY；[Cloud Hypervisor v53](https://github.com/cloud-hypervisor/cloud-hypervisor/releases/tag/v53.0)提供 snapshot/restore offload 和按需/后台恢复；[E2B faultPage](https://github.com/e2b-dev/infra/blob/cc7c574233ad98665a7c72a3d37b0af89ae79a71/packages/orchestrator/pkg/sandbox/uffd/userfaultfd/userfaultfd.go)体现页来源、COPY、重试和失败回调。[SRC-FC-002] [SRC-CH-001] [SRC-E2B-003]
 
-**验收。** 在隔离网络环境比较 full、lazy 无预取、lazy 有预取的应用可用时间、首次请求、fault p99、下载放大和未使用预取字节，覆盖高延迟、限带宽、抖动及随机访问。
+建议先复用上游恢复和增量索引，再评估把远端不可变快照范围交给 lazyd 通用内容核心。**可以同服务、同传输框架，但不能用镜像 ready bitmap 代替某台 VM 的 RAM 驻留/脏页状态。**
 
-进一步阅读：[完整自适应预取策略](../03-design-comparison/06-cache-dedup-and-prefetch.md)、[QEMU 按需与后台加载](../02-products/09-qemu/01-data-path.md)。
+Conch 定位一致快照与父层，StratoVirt 管 RAM/设备恢复，handler 解析逻辑页来源并完成填页。COPY、memfd 写页或私有文件映射按上游实际 backend 选择。恢复后业务写入不能被后台重复填页覆盖。
 
-## 6. 可写 upper 的历史数据按需读，新写入进入私有 COW
+**验证：** 跨多层页查询、显式零、重复 fault、取消、脏页/WP/REMOVE、二次 checkpoint 和私有写入。详见[内存恢复](../03-design-comparison/03-memory-snapshot-restore.md)。
 
-**我们的设计。** 将 writable disk snapshot 与只读 EROFS lower 分别建模。恢复时历史块层可按需读取，新写入进入本次运行的私有 writable head。
+## 8. 删除或失败：怎样避免一台 VM 拖坏其他 VM？
 
-**参考位置。** [E2B `Overlay.ReadAt/WriteAt`](https://github.com/e2b-dev/infra/blob/cc7c574233ad98665a7c72a3d37b0af89ae79a71/packages/orchestrator/pkg/sandbox/block/overlay.go)、[`NewNBDProvider`](https://github.com/e2b-dev/infra/blob/cc7c574233ad98665a7c72a3d37b0af89ae79a71/packages/orchestrator/pkg/sandbox/rootfs/nbd.go)、[OverlayBD Writable layer / Live Snapshot](https://github.com/containerd/overlaybd/blob/f63addfd8e51bd9eeecc12f5f4670c281a74d6e8/README.md#writable-layer)。[SRC-E2B-002] [SRC-E2B-004] [SRC-OVERLAYBD-001]
+建议由 Conch 管一次启动/恢复的最终状态，数据源与 VMM 提供 readiness、进度、错误和释放接口。具体状态/API 名称需要协商，不能只以 socket 已连接作为“能运行”。
 
-**对方具体做了什么。** E2B 的 NBD provider 组合只读 rootfs 与私有 cache；当前 `Overlay.ReadAt` 依次查 writable cache、可选的 sealing cache、基础 device，`WriteAt` 只写当前 cache。后台封存快照时旧 cache 冻结、新写入切到新 cache，旧数据仍可读取，不能直接把“seal 中”当成“可删除”。这条 host NBD 磁盘供数链与内存 UFFD 分开；guest 看到的是 virtio 块设备，不是直接运行 NBD 客户端。
+[E2B 的多来源恢复](https://github.com/e2b-dev/infra/blob/cc7c574233ad98665a7c72a3d37b0af89ae79a71/docs/ARCHITECTURE.md)提供编排参考；[Conch Sandbox store](https://gitcode.com/openeuler/Conch/blob/8248022005542407f53b606a8be979379a3fd38b/internal/adapters/containerd/sandbox/store.go)提供持久引用接入点。它们不自动解决外部缓存的租约。[SRC-E2B-001] [SRC-CONCH-001]
 
-OverlayBD 组合只读块层和最顶层的一个 writable layer，写入差异进入 upper 的 index/data；普通 commit 将它转为后续可用的只读 lower，live snapshot 则在设备运行中切换到新的 upper。这里的块 upper 与 guest OverlayFS 的目录 upper 不是同一抽象。
+准备失败时取消兄弟任务并释放本次 attachment；运行中不可恢复错误终止受影响 VM 并报告原因；删除只释放当前使用关系。共享服务要考虑错误隔离，不能一次超时终止所有租户。
 
-**我们怎样采用。** 借鉴 parent chain 加 private head 的语义。实际 block backend、快照格式和协议需按 Conch 已合入能力选择，尚未据此决定采用 NBD 或 OverlayBD。ext4 走块设备是这里的方案选择，并非声称 ext4 在任何环境都只能使用 blk。
+回收需覆盖 Template、快照父层、运行映射和 in-flight 操作。打开 FD 可能延长 inode 生存期，但不等于路径重开、bitmap、重启恢复和远端依赖都受保护。
 
-**验收。** 跨层读取选中最新块，私有写入不污染其他 VM，切换 writable head 时没有读空窗，snapshot 发布失败不丢失旧 head。若引入后台 seal，只有完成必要同步并保持引用后才能发布或回收；此项不是当前 rootfs FETCH v1 已提供的能力。
+**验证：** 两 VM 共用内容、删除其中一个、服务重启、并发 GC、过期 attachment、快照发布失败。见[完整保存与恢复流程](06-checkpoint-three-path-restore.md)。
 
-进一步阅读：[E2B 双路读取](../02-products/12-e2b-and-firecracker-stacks/01-data-path.md)、[可写 upper 比较](../03-design-comparison/02-writable-upper-and-snapshot.md)。
+## 现在可以决定什么？
 
-## 7. 内存懒恢复复用独立 page source
-
-**我们的设计。** Guest RAM 的 full/incremental snapshot 使用独立内存来源与谱系，不使用 rootfs `instance_id`。先确认现有路径是否要求完整下载，再决定是否补远端按需取页。
-
-**参考位置。** [Firecracker page fault 处理](https://github.com/firecracker-microvm/firecracker/blob/7699746649826d1dfcdde626b3131bac08f28e0d/docs/snapshotting/handling-page-faults-on-snapshot-resume.md)、[Cloud Hypervisor v53](https://github.com/cloud-hypervisor/cloud-hypervisor/releases/tag/v53.0)、[Conch #155](https://gitcode.com/openeuler/Conch/pull/155) 的 [`handlePageFault`](https://gitcode.com/openeuler/Conch/blob/1ca332dca323a209b3bcdb9534f7fb50b2360290/internal/cow/uffd.go)、[StratoVirt #2017](https://gitcode.com/openeuler/stratovirt/pull/2017)。[SRC-FC-002] [SRC-CH-001] [SRC-CONCH-003] [SRC-SV-002]
-
-**对方具体做了什么。** Firecracker 把 UFFD FD 和 memory layout 交给外部 handler，文档示例由 handler mmap 快照后 `UFFDIO_COPY`。这不是内置 registry 客户端。Cloud Hypervisor v53 发布了 snapshot/restore offload daemon、按需取页与后台 prefault，不能因 #8239 未合入便否认这些内存恢复能力，也不能将它们等同于 pmem FETCH v1。
-
-Conch #155 的 `handlePageFault` 通过 `PinnedManifest.ReadPage` 解析增量页来源，`memfd.WriteAt` 后 `wake`；StratoVirt #2017 提供 inherited memfd backend。**2026-09-08 API 核查两项仍为 open**，head 分别为 `1ca332dca323` 和 `d70c76b78f9e`，不能写成已合入前置。
-
-**我们怎样采用。** 复用内存 source、attachment 和恢复生命周期；rootfs 保持不可变 cache FD 映射。内存按需装入 RAM 不等于快照文件已经支持远端懒下载。合入状态及远端读取能力需在开发前重新核对。
-
-**验收。** 单独记录快照下载量与 RAM 实际填页量；测试最新增量覆盖父层、逻辑零页、缺失父层与恢复后写入隔离。若启用 balloon/discard，还需处理 REMOVE 后再 fault 的语义，不得重新注入已丢弃的旧快照数据。
-
-进一步阅读：[内存恢复流程](../05-flows/02-memory-lazy-restore/README.md)、[内存快照比较](../03-design-comparison/03-memory-snapshot-restore.md)。
-
-## 8. 三路统一 readiness、失败与引用管理
-
-**我们的设计。** Conch 管 rootfs、writable disk、Guest RAM 与 VMM state 的资源图。每路达到 Faultable、handler ready 后才 resume；运行期致命错误传到 Sandbox lifecycle。单个 VM 退出仅释放自己的引用，共享内容按 GC 策略回收。
-
-**参考位置。** [E2B Infra 架构](https://github.com/e2b-dev/infra/blob/cc7c574233ad98665a7c72a3d37b0af89ae79a71/docs/ARCHITECTURE.md)、[E2B `faultPage`](https://github.com/e2b-dev/infra/blob/cc7c574233ad98665a7c72a3d37b0af89ae79a71/packages/orchestrator/pkg/sandbox/uffd/userfaultfd/userfaultfd.go)、[Firecracker Caveats](https://github.com/firecracker-microvm/firecracker/blob/7699746649826d1dfcdde626b3131bac08f28e0d/docs/snapshotting/handling-page-faults-on-snapshot-resume.md#caveats)、[Conch #184](https://gitcode.com/openeuler/Conch/pull/184)。[SRC-E2B-001] [SRC-E2B-003] [SRC-FC-002] [SRC-CONCH-002]
-
-**对方具体做了什么。** E2B 在 sandbox/template 编排下组合内存 UFFD 与磁盘 COW 两条数据路径，说明一个恢复操作可以协调多类后端。Conch 原生 stores 维护运行资源与持久 metadata 的引用关系，提供本项目接入生命周期和 GC 的位置。
-
-失败策略另有直接证据：E2B `faultPage` 对 source 读取执行有限退避重试，最终失败调用 `onFailure`（若已提供）、记录错误并返回；仅凭该函数不能断言所有调用方都已终止 VM。Firecracker 明确要求外部监控 handler 并在崩溃时回收 VM，否则 fault 可能一直等待。这说明 UFFD 供页接口本身不提供完整的 Sandbox 失败策略。
-
-**我们怎样采用。** `MetadataReady/Faultable/Materialized/Failed` 和统一恢复屏障是本项目建议的状态模型，并非对方同名 API。containerd 引用保护和 lazyd 的外部 cache lease 需要明确桥接；仅写 containerd GC label 不会自动保护 lazyd 文件。没有 lease/refcount 时保守保留共享 cache。
-
-**验收。** 任一路准备失败不 resume；运行期 fatal 终止受影响 VM；两个 VM 共享内容时删除一个不影响另一个；daemon 重启、取消和 GC 与 inflight 并发时引用一致。
-
-进一步阅读：[三路恢复详细设计](06-checkpoint-three-path-restore.md)、[开发顺序与验收](07-phased-roadmap.md)、[三路恢复交互图](../05-flows/03-checkpoint-template-restore/assets/checkpoint-three-path.html)。
-
-## 本次核查的边界
-
-本轮保持八项设计方向，修正了 handler 归属、校验前提、prefault 时序、后台恢复目的和 COW 封存期间的读取关系。外部项目的实际实现不等于本项目已完成适配，更不等于本项目性能已经优于对方。
-
-- GitHub 引用已读取固定 commit 的相关文件；GitCode PR 页面工具无法解析时改用官方 API 核验状态，Conch/SV PR 代码对照同一 head 的本地对象。
-- lazyd 持久化顺序已复查本地 `751d647` 源码；本次未重跑其测试或真实掉电实验。
-- RTT 自适应窗口、三路统一状态和跨服务 lease 仍是本项目设计建议。没有新的网络性能、VM remap/wake 或多 VM 共享实测结果。
+可以确定联合流程和正确性门槛；handler 位置、磁盘组合、协议/进程组织、预取策略仍按[实施路线](07-phased-roadmap.md)进行有顺序的验证。每个选择都记录接受条件和否决条件，结果出来后再冻结跨仓契约。

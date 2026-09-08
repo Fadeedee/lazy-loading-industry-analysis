@@ -1,88 +1,67 @@
-# 分阶段开发与合入路线
+# 三仓联合实施路线
 
-> 阅读完成后，读者能够按当前上游状态组织 lazyd、StratoVirt 和 Conch 三个大 PR 的 commit，并在每阶段得到可独立验证的结果。
+> 每阶段交付一个可验证的用户流程，三个仓可同时修改；PR 按仓提交，commit 按逻辑拆分。
 
-## 前置条件
+## 阶段 0：确认基线与架构
 
-- Conch PR #184 已合入，可直接以最新 `upstream/dev` 为 metadata owner 基线。[SRC-CONCH-002]
-- Conch PR #155 与 StratoVirt PR #2017 当前开放；开始 rootfs lazy 实现前再次确认是否已合入并 rebase。[SRC-CONCH-003] [SRC-SV-002]
-- 旧 Conch/StratoVirt lazy 分支只读保留，不继续堆新修复。
+**输入：** 用户需求、[上游能力](01-current-system-boundary.md)、[候选决策](02-adopt-adapt-reject.md)。
 
-## 阶段 1：lazyd 完整 PR
+Conch 核对 Template/BootPreparer/恢复与授权，StratoVirt 核对设备/UFFD/运行控制，lazyd 核对数据源/缓存/并发。查询最新 upstream，记录 commit；增量恢复依赖以实际合入版本为准。
 
-建议 commit：
+**交付：** 架构图、资源类型、正常/失败时序、候选对照和验证门槛。先给维护者审阅架构，再进入产品代码。此阶段不冻结无实验依据的全部 ABI。
 
-1. durable range map and digest identity；
-2. descriptor-based EROFS prepare and registry auth；
-3. range coordination and crash recovery；
-4. seqpacket FETCH and read-only SCM_RIGHTS fd；
-5. tests, metrics and protocol docs。
+## 阶段 1：最小端到端选型实验
 
-验收：单元/mock registry/FD passing/restart recovery；相同 digest 不同 image/index只创建一份 cache；错误请求无 FD 泄漏。
+| Conch | StratoVirt | lazyd/临时数据源 |
+| --- | --- | --- |
+| 生成最小资源计划，记录启动和失败 | 对比内部/外部 handler，测试只读映射和普通块设备 | 提供固定内容、延迟、错误和共享缓存样例 |
 
-## 阶段 2：StratoVirt 完整 PR
+实验覆盖 pmem 与整盘块方案的关键区别，避免实现两套完整产品。用本地 mock 和真实 KVM/guest 验证地址、写保护、取消和唤醒；将结果反馈到决策文档。
 
-建议 commit：
+**退出条件：** 选定首条数据路径、handler 位置和必要能力协商；不可行的方案有可复现原因。实验不混入产品路径。
 
-1. lazy pmem config/validation；
-2. address_space UFFD missing helpers；
-3. anonymous lazy backend and readonly memslot；
-4. lazyd protocol/FD transport；
-5. fault classification, remap and wake；
-6. lifecycle/fatal shutdown；
-7. tests and docs。
+## 阶段 2：冷启动最小产品闭环
 
-验收：每个 commit边界可解释；snapshot UFFD回归；mock lazyd；真实 KVM/guest smoke；不改变 regular pmem。
+| Conch | StratoVirt | lazyd |
+| --- | --- | --- |
+| 选择性准备、持久资源引用、启动 source、guestd 设备/挂载 | 选定 backend、处理访问、状态/错误上报 | 持久缓存、校验/授权、供数和运行 attachment |
 
-## 阶段 3：Conch 完整 PR
+首版包含完整错误策略、引用保护与普通路径回归，不用“以后补生命周期”解释当前阻塞或误删风险。
 
-建议 commit：
+**验收：** 不完整下载目标镜像即交付业务；与完整路径对拍；失败可取消；两 VM 共享内容；删除不影响其他使用者。
 
-1. lazy config and PreparedRootfs schema；
-2. content-store persistence and GC references；
-3. lazyd control client；
-4. Template selective pull/prepare；
-5. typed rootfs source and BootPreparer split；
-6. StratoVirt lazy device args；
-7. guestd stable pmem mapping and EROFS+DAX；
-8. lifecycle, tests and docs。
+## 阶段 3：Checkpoint 恢复闭环
 
-验收：不创建 fake snapshot；full/CLH/regular SV回归；prepare失败不发布 Template；sandbox delete不删共享 lazyd cache。
+复用最新合入的磁盘/内存恢复能力。Conch 组织一致视图与恢复屏障，StratoVirt 处理 RAM/设备恢复和代次，lazyd 或已有专用后端支持需要的不可变数据来源。
 
-## 阶段 4：端到端与性能
+**验收：** 冷远端恢复、父层索引、私有写入、晚到填充、二次 checkpoint、跨节点重绑定、发布失败与回收。架构从阶段 0 考虑这些需求，实现允许分阶段。
 
-- cold registry/cold cache lazy start；
-- full 与 lazy内容对拍；
-- tail/padding；
-- lazyd/registry故障触发明确 VM failure；
-- 两 VM相同 layer只下载一次；
-- `MAP_PRIVATE`/`MAP_SHARED` 的 RSS/PSS/page cache；
-- 多 layer 与大量 layer；
-- x86_64/aarch64、PCI/MMIO transport；
-- full rootfs、memory full/incremental回归。
+## 阶段 4：性能策略和规模
 
-## 阶段 5：checkpoint 三路恢复
+Conch 提供场景/预算，VMM/handler 提供访问反馈，数据服务执行工作集预取、有界窗口和缓存范围提前映射。
 
-在 rootfs路径稳定后：
+比较 full、纯按需、预取和提前映射；测业务可用时间、首请求、p50/p99、下载放大、PSS、资源泄漏与恢复最终完成时间。覆盖小镜像、高层数、随机访问、冷/热缓存及隔离网络模拟。
 
-1. 将 writable ext4 upper定义为 block snapshot resource；
-2. 接入 #155 类 memory incremental resource；
-3. 实现 Restore Coordinator并行 prepare/统一失败；
-4. 加 lease/refcount、cache prune和跨节点分发；
-5. 做 fault优先级和全局 I/O budget。
+只有测量证明收益后才选择默认策略。
 
-## 可独立推进的增强：网络感知预取
+## 如何组织 PR 和 commit
 
-在阶段 4 建立无预取性能基线后推进，不作为 rootfs 正确性首版的合入前置：
+每仓可以一个完整功能 PR，三仓同时开发和评审；跨仓协议变更必须对应测试和版本协商。合入/发布顺序根据最终依赖决定，不写死“先 lazyd、最后 Conch”。
 
-1. 补齐首字节/传输/排队时间、吞吐、预取利用率观测。
-2. 实现有上限、可关闭的顺序预取，保持固定 bitmap unit 和现有 FETCH v1。
-3. 保证前台当前范围就绪即返回；后台任务共享 inflight，支持前台等待者提升优先级。
-4. 加入基于近期样本的窗口扩大/收缩，限制后台请求大小、并发和带宽。
-5. 通过隔离的测试代理或 network namespace 对比高延迟、限带宽、抖动和随机访问，验证应用可用时间、首次请求、fault p99 与下载放大。
+建议按以下逻辑组织各仓 commits，不要求数量固定：
 
-先由 lazyd 约束 rootfs 下载预算；checkpoint 三路共存后，再由 Conch 协调各后端预算，避免内存恢复、块读取和 rootfs 预取相互挤占。策略详见 [自适应预取建议](../03-design-comparison/06-cache-dedup-and-prefetch.md)。
+| 仓库 | commit 边界 |
+| --- | --- |
+| Conch | 资源契约与配置；选择性准备/发布；VMM/guestd 接入；生命周期与恢复；场景测试 |
+| StratoVirt | 能力/配置；backend/区域；handler/传输；页完成；迁移/关闭；真实边界测试 |
+| lazyd | 内容身份与完整性；缓存持久化；调度；类型适配；attachment/授权；恢复与协议测试 |
 
-## 合入顺序
+共享协议测试随字段改动提交，不能所有测试留到最后。无关清理不混入功能；修复折回负责该逻辑的 commit，保持每项改动可解释。
 
-推荐 `lazyd -> StratoVirt -> Conch -> E2E/benchmark`。每个仓可以一个完整 PR，但 commit必须按逻辑拆分；评审中不要用“后续 commit会修”掩盖当前 commit的错误路径。
+## 发布门槛
+
+- 三仓版本组合明确，能力不足时在启动前失败或使用用户明确允许的完整策略。
+- 正常启动、已有快照、关闭与安全要求通过回归。
+- 新路径真实端到端通过；mock 只证明接口，不代替 guest 验证。
+- 已知风险、未覆盖架构/内核及性能条件写清。
+- 本文是执行路线，本次文档重写没有完成上述实验。

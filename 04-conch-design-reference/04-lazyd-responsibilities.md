@@ -1,70 +1,58 @@
-# lazyd 职责与内部重构
+# lazyd：可演进的数据服务，而不是架构起点
 
-> 阅读完成后，读者能够说明 lazyd 如何通过 HTTP 控制面和 FETCH 数据面服务 virtio-pmem 懒加载，并区分本次目标与历史兼容范围。
+> 从三类数据的共同需求确定可复用核心，再决定哪些类型适配和缺页处理值得放进 lazyd。
 
-## 核心定位
+## 先从需求出发
 
-lazyd 是 immutable range content service，不是 VMM handler 或 sandbox manager。它负责：
+镜像、只读磁盘历史层、内存快照都可能需要远端读取、授权、校验、缓存和去重。这些能力可以共用；但虚机写入后的页、磁盘写层和不可变缓存不是同一种状态。
 
-- OCI registry auth、descriptor 与 HTTP Range；
-- digest/size/media type 校验；
-- digest-addressed sparse cache；
-- versioned bitmap 和 recovery；
-- range amplification、inflight 去重与 completion fan-out；
-- prepare control API；
-- FETCH seqpacket API 和 SCM_RIGHTS cache fd；
-- cache/instance metrics 与后续 lease/GC。
+建议把 lazyd 分成**内容核心 + 类型适配 + 运行会话**。这是职责建议，不要求立刻新增三个 crate 或三个进程。
 
-## 推荐内部结构
+| 部分 | 负责什么 | 不混入什么 |
+| --- | --- | --- |
+| 内容核心 | 后端读取、完整性、缓存发布、inflight 去重、预算 | 某台 VM 的脏页和设备状态 |
+| 类型适配 | 镜像布局、磁盘父层、内存快照页来源的转换 | 不能用未区分类型的 offset 同时解释所有对象 |
+| 运行会话 | 调用方权限、attachment、取消、失败、句柄 | 不以一个 VM 的结束判定共享内容可删除 |
 
-```text
-目标接口
-  ├── HTTP control adapter
-  └── seqpacket FETCH adapter
-          |
-          v
-content core
-  ├── InstanceRegistry
-  ├── RangeCoordinator
-  ├── RangeMap/bitmap
-  ├── CacheFile
-  └── RemoteBackend(OCI/...)
-```
+可先复用现有 registry、缓存和 bitmap 实现，也可在证明复杂度更低时改用分块缓存或索引。不是为统一而重写已有稳定后端。
 
-Conch 调用 HTTP 控制面准备内容；StratoVirt 处理 UFFD event，并向 lazyd 发送按 instance/offset/len 表达的 FETCH。图中的 adapter 是建议的职责划分，不表示代码中已存在同名模块。
+## handler 可以在这里，但不必强行放进内容核心
 
-## fanotify 的范围说明
+外部 UFFD 是候选方案。若验证后采用，lazyd 的 UFFD adapter 接收 VMM 区域/句柄，定位资源范围并请求内容核心；涉及 mmap 修改 VMM 地址空间的动作仍由 VMM 完成。
 
-当前 Conch + StratoVirt 方案暂不考虑 fanotify，不将其作为目标接口、启动依赖或本次验收项。Guest EROFS+DAX 访问通过 pmem GPA 落到 StratoVirt HVA，不能依靠宿主机 fanotify 为这条路径拦截缺失内容访问；触发入口由 StratoVirt 的 UFFD handler 承担。
+也可由 StratoVirt 内部处理 fault，lazyd 只接范围请求。选择依据是上游复用、错误域、权限和延迟，不是哪个仓改起来更自由。
 
-已有 fanotify 相关能力属于普通容器/VFS 场景的历史兼容范围，可暂时保留。此次设计不要求新增或重构 fanotify adapter，也不据此删除历史实现；是否继续维护或移除，留待明确其使用需求后独立决定。业界产品章节中的 fanotify 仍用于描述相应产品，不代表本项目采用。
+节点级共享缓存不要求所有 VM 共用一个无隔离 handler。session、worker 或独立进程可有不同故障域；不预先固定 binary 数量。
 
-## 已有正确性基础
+## 只读镜像与快照如何共用
 
-当前代码先 `write_all_at -> target.sync_data -> set_range_ready -> bitmap.sync_data`，满足 ready 不早于 data 的核心顺序。[SRC-LAZYD-001]
+- 不可变对象用内容和格式描述；安全域/授权要单独检查。
+- 快照视图用谱系和逻辑布局描述，映射到一个或多个内容对象。
+- 某次运行使用 attachment，维护自己的取消、权限和完成状态。
+- 当前磁盘写层和 RAM 脏页保持独立，可复用调度框架，不冒充已提交的不可变内容。
 
-cache key 严格接受 canonical SHA256，`instance_id = erofs-<cache_key>`，相同 digest 在不同 image ref/index 下复用同一内容。已有 bitmap header 包含 magic/version/unit/digest/blob size/slot count。
+首阶段可以只服务镜像，接口设计时同时用磁盘和内存样例验证表达能力；不要求三条数据面一次全部实现。
 
-## 合入前收敛
+## 缓存正确性
 
-1. **只读 FD 导出**：FETCH 完成后重新以 `O_RDONLY|CLOEXEC` 打开 cache，SCM_RIGHTS 不发送内部写句柄。
-2. **等待通知**：将 5 ms poll 替换为 `Notify`/shared future；完成后 fan-out，错误也要唤醒等待者。
-3. **recovery 边界**：承认 `SEEK_DATA/HOLE` 只能清理明显洞；强校验可按 checksum/version 或保守清 ready 设计。
-4. **凭据**：维持 `0600`/原子写，日志脱敏，定义 token refresh 和 credential rotation。
-5. **生命周期**：`DELETE instance` 只卸载运行态注册还是删除 persisted state要明确；无 lease 前不暴露会误删共享 cache 的 Conch cleanup。
-6. **权限**：socket owner/mode、peer credential、request size/concurrency quota。
-7. **观测**：remote bytes、cache hit、waiters、fetch latency、bitmap recovery、FD count。
+完整写入和必要校验后才能发布可读范围。持久 ready 用于重启复用时，先保证数据持久化，再持久化 ready。原子 chunk 发布、日志或 bitmap 都是候选实现。
 
-## 后续扩展
+需要防止跨身份配置冲突、错误尾页、校验失败仍标 ready、并发重复下载和文件截断。导出的共享只读内容句柄应收紧权限；直接复制或映射的消费者还要检查范围与对象存活期。
 
-### 自适应预取
+## 调度由三仓协作
 
-建议由 `RangeCoordinator` 管理前台需求与后台预取，两者共享 bitmap、inflight 去重和 data-before-ready 顺序。前台所需范围就绪即返回 FD，不等待预测范围；前台命中预取任务时复用并提升优先级。后台预取失败只影响预测任务，不能污染 ready 状态。
+Conch 提供场景/节点预算，VMM 或外部 handler 提供访问反馈，lazyd 结合队列、远端耗时和缓存命中进行调度。新增访问流、优先级或 deadline 字段可以讨论，但必须定义兼容和授权。
 
-保留固定 `fetch.unit_bytes`，动态调整预取单位数和并发。结合近期延迟、吞吐、连续访问和预取利用率调整窗口，不因首次请求慢就扩大下载。配置集中在 lazyd，窗口、并发和带宽均有上限，拥塞时收缩或暂停；不需要修改 FETCH v1 或要求 StratoVirt 增加 PROBE。
+固定缓存粒度与动态预取窗口是两个问题。bitmap 若采用固定 unit，不能随意改已有 header；这不意味着新设计永久绑定某个 unit 或 JSON 版本。
 
-这是待实现增强，先做关闭/开启可对比的顺序预取，再引入网络反馈。详细策略、v1 访问流限制和验收矩阵见 [缓存、去重与预取比较](../03-design-comparison/06-cache-dedup-and-prefetch.md)。
+详见[预取策略](../03-design-comparison/06-cache-dedup-and-prefetch.md)。
 
-### 其他数据对象
+## fanotify 的位置
 
-lazyd 可以增加新的 immutable object type或 block-diff source，但要使用明确版本化 schema。guest RAM source优先由 StratoVirt/conch-cow 管理，不应因为同样按 range 读取就强行并入 EROFS instance。
+本轮不把 fanotify 作为 guest pmem/DAX 的触发入口。这条 guest 内存访问链不能依靠 host VFS 事件补齐缺失内容。产品研究仍可记录 fanotify 在文件访问路线的作用；是否新增其他文件路径要有独立需求，不能因为已有适配器就默认纳入。
+
+## 验收
+
+按对象类型测试身份、授权、索引、校验和重启；按会话测试并发、取消、超时、崩溃及句柄泄漏；按三仓流程测试多 VM 内容复用、节点迁移和回收。共享缓存收益与每 VM 最终内存占用分别测量。
+
+参考：[Nydus](../02-products/01-nydus-v2/03-conch-reference.md)、[实验 v3](../02-products/02-nydus-v3/03-conch-reference.md)、[E2B](../02-products/12-e2b-and-firecracker-stacks/03-conch-reference.md)。

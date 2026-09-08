@@ -1,79 +1,65 @@
-# Checkpoint/Template 三路恢复设计
+# 一次 Checkpoint 的保存与恢复
 
-> 阅读完成后，读者能够解释一次 checkpoint template 恢复时 rootfs lower、writable disk 和 guest RAM 如何并行准备、分别 fault，并由 Conch 统一失败和生命周期。
+> 快照是一个一致时间点的资源集合，不只是一个内存文件。三类数据可共用基础服务，但恢复规则不同。
 
-## 资源图
+## 先确定恢复视图
 
-```text
-Checkpoint Template / Boot Index
-  ├── PreparedRootfs
-  │    └── EROFS layer digest -> lazyd instance
-  ├── WritableDiskSnapshot
-  │    └── parent + changed block layers
-  ├── MemorySnapshot
-  │    └── full-v1 或 incremental-v1 base/delta
-  └── Sandbox/VM assets
-       └── kernel + initrd + VMM state
-```
+建议 Conch 保存一个可重建的资源图，包含：
 
-## 准备阶段
+| 资源 | 身份与内容 |
+| --- | --- |
+| 只读镜像 | 确定的版本、布局和内容引用 |
+| 磁盘快照 | 父层、变化块、显式零/丢弃语义和设备大小 |
+| 内存快照 | RAM 布局、完整或增量来源、页覆盖关系 |
+| CPU/设备状态 | 与上述数据一致的执行和设备状态 |
+| 环境约束 | VMM/格式兼容、设备身份、网络与安全处理要求 |
 
-Conch 并行启动或连接：
+如果采用整盘块方案，镜像文件可能已经包含在磁盘视图内，不必机械制造一条独立 pmem 路径。“三类对象”不等于每次都启动三个 daemon。
 
-1. **rootfs**：确认 lazyd prepared instances 可恢复、StratoVirt lazy pmem specs 完整。
-2. **disk**：建立 read-only parent chain 和新的 private writable head。
-3. **memory**：full file 可访问，或 conch-cow Attach 返回 memfd/attachment。
-4. **VM assets**：kernel/initrd/VMM state完整且版本匹配。
+## 恢复：先保证能处理访问，再放行执行
 
-只有每路达到 `Faultable`，才启动/恢复 vCPU。
+1. Conch 解析同一个 checkpoint，验证版本、谱系和授权。
+2. 并行准备所需索引、数据来源和私有写层，建立临时引用。
+3. StratoVirt 接入设备/RAM；handler 和 source 可处理访问，错误可被观察。
+4. 恢复 CPU/设备状态；若该过程会读 RAM，相关 source 必须更早就绪。
+5. 确认所有必需资源达到当前策略要求，再允许执行。
+6. 运行中的缺失内容按需供应；前台需求和后台任务协调。
 
-## 运行阶段
+“可按需处理”不等于全量下载。就绪可以通过状态查询、握手或 attachment API 实现，不强制只用某个 ACK。
 
-```text
-rootfs file read
-  -> EROFS+DAX -> pmem GPA -> lazy HVA UFFD
-  -> StratoVirt -> lazyd -> cache fd/remap/wake
+## 运行时各自保证什么
 
-writable file read/write
-  -> ext4 -> virtio-blk
-  -> block parent/COW cache
+镜像只读内容可共享；磁盘先读最新写层，再查父层；RAM 按确定的来源恢复，业务产生的新写入归该 VM。
 
-guest instruction/data access
-  -> guest RAM HVA UFFD
-  -> memory restore source/conch-cow -> memfd page/wake
-```
+可以由 lazyd 的共同内容核心供应三类不可变来源，也可以连接已有 memory/block 后端。每个适配器维护自己的逻辑布局和写入/恢复状态，不把“缓存 ready”误当作“VM 已安装此页”。
 
-三路 fault 可以并发。Conch 不处理每次 fault，但必须监听 StratoVirt、block backend 和 conch-cow 的 fatal status，并将任一不可恢复错误转成 Sandbox failure/cleanup。
+内存或磁盘的 sparse hole 可能表示继承，也可能由格式定义为零；缺少下载数据则是另一种状态。区分依赖格式索引，不能单靠文件洞判断。
 
-## 与 PR #155 的组合
+## 保存：最危险的是时间点不一致
 
-PR #155 的 `incremental-v1` 用 build map确定每段 guest memory最终所属 layer，conch-cow 将页 `pwrite` 到 inherited memfd 后 `UFFDIO_WAKE`。[SRC-CONCH-003] 这与 rootfs FD remap不同：
+建议按以下语义安排，具体顺序与上游 checkpoint 实现一起验证：
 
-- memory写入一个 VM 私有 memfd；
-- rootfs映射共享、不可变 EROFS cache fd；
-- memory build map按 checkpoint lineage；
-- rootfs bitmap按 OCI digest/range。
+1. 冻结或协调 guest 执行与相关 I/O，明确崩溃一致/应用一致级别。
+2. 排空或捕获在途写入，固定磁盘和内存的同一快照代次。
+3. 导出变化块、脏页和 CPU/设备状态；不可变来源继续引用。
+4. 校验完整依赖关系，持久化必要内容或可靠远端引用。
+5. 原子发布新 checkpoint 根；失败时不破坏已有根。
+6. 建立新的私有写层和脏页代次，按恢复策略继续执行。
 
-## 创建新 checkpoint
+只 pause vCPU 不能自动排空所有设备 I/O；只复制 upper 文件也不能自动形成可恢复的 VM 快照。
 
-1. pause/quiesce VM；
-2. 固化 writable disk changed blocks；
-3. 获取 memory dirty generation并生成 base/delta；
-4. 保存外置 VMM/device state；
-5. 发布每类 descriptor 和新的 Boot Index；
-6. 原子推进 checkpoint head；
-7. 建立新的 writable/dirty generation 后 resume。
+## 失败与回收
 
-immutable rootfs lower通常只被新 Boot Index继续引用，不重新保存；若镜像配置发生变化，则创建新的 PreparedRootfs引用集合。
+Conch 负责整体结果，VMM/数据源报告各自失败。取消时先阻止新访问，再释放 attachment，最后释放资源引用。回收必须保护快照父层、运行期来源和在途操作。
 
-## 统一状态，不统一数据协议
+不能只靠超时租约到期就截断仍被 VM 映射的文件。重启后需要恢复引用或进行保守协调，确定没有使用者才回收。
 
-推荐每个 resource driver暴露：
+## 参考和差异
 
-- `Prepare()`；
-- `ReadyLevel()`：MetadataReady/Faultable/Materialized；
-- `Failure()`；
-- `Acquire/Release()`；
-- metrics/progress。
+[E2B](../02-products/12-e2b-and-firecracker-stacks/02-cache-snapshot-lifecycle.md)提供磁盘/内存组合与 COW 视图参考；[OverlayBD](../02-products/05-overlaybd/02-cache-snapshot-lifecycle.md)提供块层切换；[QEMU](../02-products/09-qemu/01-data-path.md)提供按需与后台填页的状态协调。
 
-其内部数据面继续分别使用 lazyd FETCH、block I/O 和 memory UFFD。这样统一恢复事务，又不把不同正确性语义混在一起。
+[上游增量恢复 PR 状态](01-current-system-boundary.md)是实施条件，不是本次已完成结果。架构允许复用最终合入能力，不假定其自带远端懒下载。
+
+## 验收
+
+恢复后校验文件和内存；父层缺失/显式零；并发写入与后台填充；新快照失败后旧快照可用；两 VM 私有写入隔离；跨节点重绑定；服务故障与取消没有遗留资源。详细流程见[恢复执行清单](../05-flows/03-checkpoint-template-restore/README.md)。

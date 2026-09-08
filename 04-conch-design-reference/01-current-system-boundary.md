@@ -1,96 +1,62 @@
-# 当前三仓边界与代码现状
+# 开发前先确认：上游已经有什么
 
-> 阅读完成后，读者能够基于 2026-09-04 的最新远端引用说明 Conch、lazyd、StratoVirt 已有什么、旧 lazy 分支为何不能直接合入，以及新实现应从哪里接入。
+> 这里记录代码事实，不替我们决定新架构。每次开始实现时重新查询 upstream/dev，并记录实际开发 commit。
 
-## 1. 审计基线
+## 本次核查基线
 
-| 仓库 | 当前事实基线 | lazy 参考分支 | 结论 |
-| --- | --- | --- | --- |
-| Conch | `upstream/dev` `0b405ce0d4d2` | `lazy-pmem-conch-pr5` | 旧分支落后 182 commits，不能整体 rebase |
-| lazyd | feature `751d647` | 当前 feature 本身 | 核心能力保留，做内部重构/收口 |
-| StratoVirt | `origin/dev` `0f948b653b1f` | `lazy-pmem-full` | 旧分支落后 131 commits，按最新 pmem/UFFD 重写 |
+2026-09-08 通过远端 Git 查询分支，Conch 在临时副本拉取并读取源码；StratoVirt 的远端 commit 与本地 Git 对象一致。没有修改产品仓分支或运行产品测试。
 
-来源：[SRC-CONCH-001] [SRC-LAZYD-001] [SRC-SV-001] [SRC-SV-003]
-
-## 2. Conch 当前所有权
-
-PR #184 已进入 `dev`，使 containerd 成为 Template 与 Sandbox metadata 的持久 owner。[SRC-CONCH-002]
-
-当前关键路径：
-
-```text
-Template name
-  -> containerd image record
-  -> immutable Boot Index digest
-  -> rootfs / mem-snapshot / sandbox component descriptors
-  -> ResolveBoot
-  -> BootPreparer
-  -> snapshot BootLayout
-  -> VMM ResourceArgs
-```
-
-关键代码位置：
-
-| 路径 | 当前职责 | lazy 接入点 |
+| 项目 | 本次核查 commit | 证据 |
 | --- | --- | --- |
-| `internal/image/bootindex.go` | 构建/校验 Boot Index 及 component closure | 给 rootfs component 增加 prepared-rootfs descriptor/annotation 关系 |
-| `internal/adapters/containerd/template/store.go` | Template name 到 Boot Index target，维护 content children labels | 保护 lazy metadata content，不保存 cache 路径 |
-| `internal/adapters/containerd/sandbox/store.go` | Sandbox record、Boot Index 和 runtime snapshot GC refs | 保护运行中 prepared-rootfs descriptor 引用 |
-| `internal/sandbox/boot.go` | ResolveBoot、singleflight、BootLayout 与 BootSpec | 按 typed rootfs source 分 full/lazy，不再假设都已 unpack |
-| `internal/snapshot/server.go` | rootfs/memory/VM runtime snapshot mount/layout | lazy external rootfs 不创建 fake snapshot/view |
-| `internal/vmm/stratovirt/stratovirt.go` | 普通 StratoVirt 命令、file-backed pmem、snapshot restore | 从 typed lazy source 生成 lazy pmem args |
+| Conch upstream/dev | `8248022005542407f53b606a8be979379a3fd38b` | [固定源码](https://gitcode.com/openeuler/Conch/tree/8248022005542407f53b606a8be979379a3fd38b) [SRC-CONCH-001] |
+| StratoVirt upstream/dev | `0f948b653b1f695ad9a527059e42baff77e07a3f` | [固定源码](https://gitcode.com/openeuler/stratovirt/tree/0f948b653b1f695ad9a527059e42baff77e07a3f) [SRC-SV-001] |
+| lazyd 可复用能力样本 | `751d647fb37fa2e01f6fb1784003e8b26aa00244` | [固定源码](https://github.com/Fadeedee/lazyd/tree/751d647fb37fa2e01f6fb1784003e8b26aa00244) [SRC-LAZYD-001] |
 
-当前 `BootSpec.PmemPaths []string` 只表达 file-backed EROFS 路径，无法安全表达 lazyd instance、blob size 和 socket。新实现要增加显式联合类型或独立 `PmemSources`，不能继续让路径字符串承担两种语义。
+最后一行是现有实现样本，不是限制设计的协议标准，也不是本轮查询出的远端最新提交。
 
-## 3. StratoVirt 当前所有权
+## Conch：不是一个只负责拼命令的客户端
 
-`origin/dev` 的 `virtio/src/device/pmem.rs` 只接受 `memory-backend-file`，要求 pmem GPA 和 size 2 MiB 对齐，并在 `MemoryBackend` 上建立 file mapping。[SRC-SV-001]
+当前路径是 Template 对应 Boot Index，解析 rootfs、memory、VM components，形成启动布局后交给 VMM。Template/Sandbox store 保存持久状态和资源引用。
 
-上游同时已有 snapshot UFFD/write-protect 逻辑和 seccomp allowlist。新 lazy missing backend 必须复用 `address_space` 的 UFFD wrapper，但不能改变 snapshot WP negotiation/fallback。
+| 代码位置 | 观察到的行为 | 对设计意味着什么 |
+| --- | --- | --- |
+| [bootindex_pull.go](https://gitcode.com/openeuler/Conch/blob/8248022005542407f53b606a8be979379a3fd38b/internal/image/bootindex_pull.go) | `WithPulledBootIndex` 使用带 lease 的 `client.Fetch`，wrapper 检查根类型，没有按需 payload 筛选 | selective pull 不只是增加 CLI 开关，要区分元数据与数据的遍历及完整性检查 |
+| [boot.go](https://gitcode.com/openeuler/Conch/blob/8248022005542407f53b606a8be979379a3fd38b/internal/sandbox/boot.go) | `BootPreparer` 经 snapshot backend 得到布局；`BootSpec.PmemPaths` 表达本地路径 | 启动契约需表达本地文件或按需资源，不能用缺文件假装完整布局 |
+| [sandbox/store.go](https://gitcode.com/openeuler/Conch/blob/8248022005542407f53b606a8be979379a3fd38b/internal/adapters/containerd/sandbox/store.go) | Sandbox extension 和 Boot Index/runtime snapshot GC 引用 | 复用资源 owner；外部缓存保护需明确连接，不会由 GC label 自动获得 |
+| [stratovirt.go](https://gitcode.com/openeuler/Conch/blob/8248022005542407f53b606a8be979379a3fd38b/internal/vmm/stratovirt/stratovirt.go) | 为 pmem 生成 file backend；恢复使用 `incoming file:...,mapped=true` | 普通启动和本地恢复可作为回归基线，不等于远端按需取数 |
+| [daemon.go](https://gitcode.com/openeuler/Conch/blob/8248022005542407f53b606a8be979379a3fd38b/internal/daemon/daemon.go) | Shutdown 与 HTTP Serve 的停止关系已收口 | 新增长任务和数据源连接必须纳入停止/取消路径 |
 
-旧 `lazy-pmem-full` 已验证：
+guestd 位于 `internal/agent/guestd`，归 Conch 仓维护。设备识别、挂载和失败反馈属于三仓联调的一部分。[SRC-CONCH-001]
 
-- lazy 参数及 regular/lazy 分流；
-- anonymous HVA、UFFD missing registration；
-- lazyd `FETCH`/SCM_RIGHTS client；
-- data/padding classification；
-- `mmap(MAP_FIXED)` 和 wake；
-- fetch timeout、range/file 校验和 fatal shutdown request。[SRC-SV-003]
+## StratoVirt：已有外部 UFFD，不要重复造一套
 
-这些是算法和测试证据，不是可合入基线。尤其 `pmem.rs` 上游已经变化，旧分支新增约 2359 行且落后 131 commits，机械移植会重新引入重复 abstraction。
+[pmem.rs](https://gitcode.com/openeuler/stratovirt/blob/0f948b653b1f695ad9a527059e42baff77e07a3f/virtio/src/device/pmem.rs) 的普通 pmem 使用 file backend，设备地址和大小要求 2 MiB 对齐；共享标志影响后端打开/映射行为。**后端文件只读打开，不等于我们已验证 guest 对共享页面的全部写保护。**
 
-## 4. lazyd 当前能力
+[address_space/uffd.rs](https://gitcode.com/openeuler/stratovirt/blob/0f948b653b1f695ad9a527059e42baff77e07a3f/address_space/src/uffd.rs) 已有：
 
-feature 分支已经具备：[SRC-LAZYD-001]
+- `UffdMemoryBackend::register_region`：清除已驻留页后注册 MISSING，可协商 WP；
+- `send_to_external_uffd_daemon`：通过 UnixStream/SCM_RIGHTS 发 UFFD FD 与区域描述，保留连接；
+- dirty/resident bitmap、WP 回退，以及相应测试。
 
-- canonical `sha256:<64 lowercase hex>` 校验与 digest-addressed cache key；
-- sparse `layer.erofs`、versioned range bitmap 与 configurable fetch unit；
-- descriptor-based EROFS prepare，Conch 不必让 lazyd 解析 Boot Index；
-- registry Bearer challenge/token 与 Range backend；
-- `ensure_range` 放大、inflight 去重、data sync 后 bitmap ready；
-- `SOCK_SEQPACKET` JSON FETCH v1 和 SCM_RIGHTS cache FD；
-- blob tail-page 真实字节拉取及 padding 零语义；
-- 持久 `instance.json` 与 restart restore。
+这为外部 handler 提供现实起点，但函数**不等待 ready ACK**，也没有因此获得 pmem 文件 remap 通道。事件能排队不等于数据源可用、失败可传播。新设计应补齐可观察的 attachment 就绪和失败语义，而非机械添加某个 ACK 字节。[SRC-SV-001]
 
-当前需收敛的问题：
+## 增量恢复依赖：明确条件，不提前当作基线
 
-- `Instance.target` 以读写方式打开并 `try_clone` 后发送，导出的 fd 权限应收紧为只读；
-- inflight 等待采用固定 5 ms sleep，可改为 completion notification/fan-out；
-- recovery 的 `SEEK_DATA/SEEK_HOLE` 只能发现明显洞，不能证明内容摘要正确；
-- auth 持久化虽使用 `0600` 和原子 rename，仍需凭据更新、脱敏和长期 credential provider 设计；
-- instance unregister 会删除持久 state，没有 lease/refcount 前 Conch 不应在单 VM cleanup 中调用它。
+2026-09-08 官方 API 查询结果：
 
-## 5. 即将合入能力的影响
+| PR | 状态与 head | 用法 |
+| --- | --- | --- |
+| [Conch #155](https://gitcode.com/openeuler/Conch/pull/155) | open，`1ca332dca323` | 内存谱系、conch-cow attachment、memfd 写页方案参考 |
+| [StratoVirt #2017](https://gitcode.com/openeuler/stratovirt/pull/2017) | open，`d70c76b78f9e` | inherited memfd backend 参考 |
 
-Conch PR #155 和 StratoVirt PR #2017 当前均为开放 PR，不属于 `dev` 现有能力。[SRC-CONCH-003] [SRC-SV-002]
+两项均不是本次 dev 已合入能力。[SRC-CONCH-003] [SRC-SV-002] 用户计划它们先于懒加载落地，因此实施前必须重新确认合入版本和最终接口，再决定复用范围。
 
-如果先于 rootfs lazy 合入：
+## lazyd：能力可复用，接口可重新设计
 
-- PR #155 已建立 memory format、base/delta lineage、conch-cow attachment 和 memory fault 生命周期，Conch 应复用其 checkpoint resource model；
-- PR #2017 允许外部 `memfd` 作为 guest RAM backend，服务 memory incremental restore；
-- 它们不替代 rootfs lazy pmem，因为 guest RAM memfd 和 EROFS cache 的身份、读路径和生命周期不同；
-- StratoVirt 可以复用 FD 验证、UFFD helper 和 fatal handling，但必须保留 memory/pmem 两种 region/source。
+固定样本包含 descriptor prepare、registry Bearer auth、按范围取数、digest cache、bitmap、inflight 协调及 FD 数据面。此前核查确认数据同步先于 bitmap ready。[SRC-LAZYD-001]
 
-## 6. 当前设计判断
+这些可以降低实现成本，但不要求继续使用同名 API、固定单位或固定服务职责。只读句柄、缓存完整性、授权、跨服务回收等仍要按新方案审计；不能把样本已有测试等同于三仓新版本联调通过。
 
-旧设计中仍有效的是 `anonymous HVA -> UFFD -> lazyd FETCH -> fd -> fixed remap -> wake` 数据面。已失效的是 fake rootfs snapshot、路径型 `lazy-rootfs.json`、旧 image-first pull 和旧 `PmemPaths` 扩展方式。新版必须围绕 Boot Index、containerd content/image/sandbox store 和 BootPreparer 重建接入。
+## 实施前的检查
+
+先记录三个实际开发 tip，再看 upstream 是否已改变上述路径。保留正常启动、快照恢复和关闭行为的回归用例；从需求出发增加 source/attachment 能力，不直接把路径参数或历史实验分支当成设计约束。

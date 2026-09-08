@@ -1,89 +1,62 @@
-# 冷启动 Rootfs 懒加载流程
+# 从远端镜像到首次业务请求
 
-> 阅读完成后，读者能够从 Lazy Template 准备一路跟踪到 guest 首次文件读取，并定位每个持久对象、地址转换、FD 传递和失败责任。
+> 阅读完成后，能够解释谁选择启动资源、什么时候可以开机，以及懒加载为什么不能只测“VM 已启动”。
 
-## 阶段 A：Template 准备
+这是**待验证的角色级流程**，不是当前上游已实现的协议。先看[交互时序图](assets/cold-rootfs.html)，再按下面三步理解；图里的“供数角色”可以包含 lazyd 与类型适配器，不代表固定进程数。
 
-```text
-User/API
-  -> Conch Template pull/prepare (lazy rootfs mode)
-  -> pull Boot Index + manifests/config/descriptors + kernel/initrd assets
-  -> select native EROFS rootfs layer descriptors
-  -> lazyd Prepare(descriptors, fetch unit, alignment)
-  -> lazyd create/reopen digest cache + bitmap + persistent instance
-  -> Conch write PreparedRootfs JSON to containerd content store
-  -> publish Template image record -> Boot Index/metadata GC references
-```
+## 1. 准备镜像，但不下载所有 rootfs 数据
 
-关键约束：
+用户请求准备镜像。Conch 解析 Boot Index、manifest 和组件描述，确定 kernel/initrd、rootfs 等各自用途；启动必需的小型状态和资产先完整就绪。
 
-- 不完整下载 EROFS layer；
-- lazyd只接收明确 descriptors，不解析 Conch Boot Index；
-- prepare失败时不发布可见 Template；
-- cache以 digest复用，Template name不是 cache identity；
-- registry credential留在 lazyd，不写 PreparedRootfs。
+随后 Conch 把明确的数据对象交给内容供应服务。服务完成来源授权、索引/大小检查、缓存打开及引用登记，返回可按需读取的资源句柄。Conch 只有在整组资源准备成功后才发布可用记录。
 
-## 阶段 B：Sandbox/VMM 初始化
+这里要先补齐当前上游拉取路径的 payload 筛选，不能只加一个 lazy 标签后继续递归 Fetch 所有内容。现状见[代码基线](../../04-conch-design-reference/01-current-system-boundary.md)。
 
-```text
-CreateSandbox(template)
-  -> Conch resolve Template -> Boot Index -> PreparedRootfs
-  -> BootPreparer selects LazyPmem rootfs source
-  -> build StratoVirt lazy pmem device specs
-  -> StratoVirt validate lazy/readonly/size/instance/socket
-  -> mmap anonymous HVA region
-  -> register HVA in AddressSpace/KVM memslot as pmem GPA
-  -> UFFDIO_REGISTER(MISSING)
-  -> start internal fault loop + lazyd client
-  -> expose virtio-pmem and start/resume vCPU
-  -> guestd resolves stable pmem IDs
-  -> mount each lower as EROFS ro,dax and assemble overlay
-```
+**要观察：**启动前远端 rootfs 字节数、实际落盘量、失败准备是否留下可见但不可用的记录。
 
-`HVA/memslot/UFFD/fault loop ready` 是 vCPU 运行前屏障。Conch 不创建 fake rootfs snapshot，StratoVirt 不接收 sparse path 作为普通 file backend。
+## 2. 连接数据来源，再允许 guest 运行
 
-## 阶段 C：首次读取
+Conch 根据选定设备方案生成启动配置。StratoVirt 建立设备和地址空间，并与相应数据来源完成就绪确认。guestd 是 Conch 的 guest 内组件，负责设备识别及文件系统组装。
+
+两种方案都需要比较：
+
+| 候选 | guest 如何读取 | 启动前必须就绪 |
+| --- | --- | --- |
+| 只读 EROFS + pmem/DAX，加独立可写层 | 文件数据通过 pmem 映射访问 | 文件系统能力、地址映射、fault 处理及数据来源 |
+| rootfs 纳入块设备/COW 视图 | 文件系统产生块请求 | 块视图、父层索引、读写后端及私有 writable head |
+
+内部或外部 UFFD handler 都可以成为第一种方案的实现，必须通过实验选择。**发送过 FD 不等于数据来源已就绪**；注册事件处理、来源确认、失败通道要一起满足启动门槛。
+
+## 3. 第一次读文件时发生什么
+
+以 pmem/DAX + 文件映射候选为例：
 
 ```text
-guest process reads file GVA
-  -> guest page table maps EROFS DAX offset to pmem GPA
-  -> KVM memslot maps GPA to StratoVirt fault_hva
-  -> host kernel queues UFFD_EVENT_PAGEFAULT
-  -> StratoVirt handler: off = page_hva - base_hva
+guest 访问文件数据
+  -> pmem GPA 对应的 VMM HVA 尚未填充
+  -> host kernel 产生 UFFD missing event，当前访问等待
+  -> handler 定位内容对象和范围
+  -> 内容服务命中本地缓存，或按需下载、校验并发布 ready
+  -> VMM 安全映射已就绪文件范围
+  -> resolve/wake，guest 重试并读到数据
 ```
 
-### Data range
+若 handler 在外部进程，它不能直接用自己的 mmap 改写 VMM 地址空间，需要 VMM 映射执行通道或另选填充机制。COPY 与 file mapping 的收益及风险见[比较](../../03-design-comparison/05-copy-vs-shared-mapping.md)。具体请求名、FD 结构和握手尚未冻结。
 
-```text
-StratoVirt FETCH(instance_id, off, page_len)
-  -> lazyd align/amplify to fetch unit
-  -> ready? yes: skip remote
-           no: one inflight owner fetches OCI Range
-               -> validate/write cache
-               -> cache sync
-               -> bitmap ready + bitmap sync
-               -> notify all waiters
-  -> send fetch_ok(range) + read-only cache FD via SCM_RIGHTS
-  -> StratoVirt fstat/range/alignment/coverage validation
-  -> mmap ready range at base_hva+off with MAP_FIXED
-  -> UFFDIO_WAKE remapped range
-  -> vCPU retries and reads file-backed page
-```
+尾页中真实数据之外的字节必须按设备格式定义处理；不能把未知、未下载的内容当作零。块设备候选则通过块请求完成通知恢复访问，不要求把这段 UFFD 流程照搬过去。
 
-### Padding range
+## 第二个 VM 会复用什么
 
-`off >= round_up(blob_size, host_page_size)` 且 `< pmem_size` 时，不请求 lazyd，直接 `UFFDIO_ZEROPAGE`/wake。最后一个 data page 内 `[blob_size, page_end)` 由 sparse cache初始化零语义保证。
+内容服务可复用同一授权域中同一内容的缓存，并合并重叠下载。每个 VM 仍独立建立设备、地址映射和运行状态；不是 VM1 下载后 VM2 就自动拥有所有映射。
 
-## 阶段 D：第二个 VM
+文件映射方案还可以复用同一 inode/offset 的干净物理文件页。是否优于 COPY，需要用下载量、私有页和 PSS 等指标比较。
 
-第二个 VM仍有自己的 GPA、HVA、memslot 和首次 UFFD fault。lazyd命中同一 digest/range bitmap，不重复远端下载；StratoVirt接收同一 cache inode的新 FD引用并映射。是否共享最终 host physical file page取决于映射标志、页是否干净和内核行为，需要 PSS/page-cache实测。
+## 验收清单
 
-## 失败
+- 同镜像 full 与 lazy 启动执行相同业务，文件内容对拍。
+- 分别测 prepare、guest ready、应用 ready 和首请求延迟。
+- 冷缓存、热缓存、多 VM、高 RTT 下比较两种设备方案。
+- 取数失败、handler 退出、VMM 取消都能有限时间结束等待并上报。
+- 单 VM 退出不破坏其他 VM 正在使用的共享内容。
 
-- lazyd timeout/协议/FD/range错误：StratoVirt请求 machine shutdown；
-- VMM退出：Conch标记 Sandbox失败并清理运行资源；
-- 单 Sandbox删除：释放 mapping/device，不删除共享 lazyd cache；
-- registry/digest错误：lazyd不设置 ready，返回失败；
-- guest不支持 pmem/DAX：在启动/挂载阶段明确失败或按策略走 full fallback，不静默读零。
-
-代码与职责说明见[当前系统边界](../../04-conch-design-reference/01-current-system-boundary.md)。
+设计依据见[决策 1、2、4、7](../../04-conch-design-reference/08-design-decisions-and-evidence.md)。

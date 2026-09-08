@@ -1,53 +1,43 @@
-# 采用、适配与拒绝清单
+# 候选方案与选择门槛
 
-> 阅读完成后，读者能够把业界调研转成明确工程决策，区分可直接采用的原则、必须按现有代码适配的机制和不应引入的路线。
+> 区分必须保证的语义与可以替换的机制。建议优先级不是已经完成选型。
 
-## 直接采用
+## 必须满足的要求
 
-| 决策 | 依据 |
-| --- | --- |
-| rootfs、writable disk、guest RAM 三种对象独立建模 | E2B、Firecracker、QEMU |
-| immutable cache 以 digest 为 identity | Nydus、stargz、SOCI |
-| descriptor-based prepare，image selection 留在 orchestrator | SOCI 与当前 lazyd 边界 |
-| fault request 优先于 background prefetch | QEMU、CRIU、E2B |
-| UFFD handler/source 必须早于 vCPU ready | Firecracker、Nydus UFFD |
-| data durable 后才能标记 ready | cache correctness 基线 |
-| SCM_RIGHTS FD、range/file/alignment 全校验 | Nydus UFFD、SV 旧原型 |
-| 单 VM delete 不删除共享 content cache | 内容身份与多 VM 共享 |
-| snapshot API 与 lazy data path 分开验收 | OpenSandbox 反例 |
+内容正确、授权明确、运行写入隔离、恢复一致、失败可处理、引用可回收。这些来自产品需求，不需要为了每项要求强行找一个“同款项目”。
 
-来源：[SRC-E2B-001] [SRC-FC-002] [SRC-NYDUS-004] [SRC-QEMU-001] [SRC-SOCI-002] [SRC-OPENSANDBOX-001]
+## 按同一标准比较
 
-## 需要适配
+| 决策 | 候选 | 先验证什么 | 什么情况下改选 |
+| --- | --- | --- | --- |
+| 镜像/磁盘布局 | EROFS pmem + 私有写层；整盘块快照；文件服务 | 前两者的业务延迟、PSS、快照一致性及设备规模 | guest 不支持 DAX、层数过大或混合布局维护成本超过收益 |
+| UFFD handler | VMM 内置；外部服务 | 先验证上游外部交接，再比较故障处理和往返 | 外部失败隔离/权限过重，或内置路径显著简化生命周期 |
+| 页完成 | COPY；只读文件映射；适用 backend 的 memfd 写页 | 不可变 rootfs 的文件映射与 COPY 对照 | remap/UFFD/KVM 边界难以闭合，或收益不足 |
+| 内容服务 | 共用核心+类型适配；多个专用后端 | 共用下载、完整性、缓存、预算；隔离状态机 | 一个适配器的错误会破坏其他对象或格式依赖过重 |
+| 启动优化 | 纯按需；工作集预取；缓存范围提前映射 | 分别测，不把“预取”和“映射”混为一个开关 | 额外等待/下载抵消首次业务收益 |
+| 内容粒度 | blob；固定块；内容 chunk；组合 artifact | 随机读取、校验依据、跨 VM 共享与索引开销 | 小粒度元数据成本或大粒度下载放大不可接受 |
+| Conch 接入 | 原生 source/BootPreparer；snapshotter 契约 | 谁真实拥有 mount、资源状态和回收 | 重复存储 owner，或不得不伪造已完成 unpack |
+| 部署隔离 | 节点共享服务；每 VM/session worker | 缓存仍可共享，计算/凭据/失败域分别隔离 | 共享故障或租户边界不可控 |
 
-| 上游经验 | 当前项目适配 |
-| --- | --- |
-| Nydus UFFD Zerocopy | 保留 lazyd FETCH v1，按 StratoVirt abstraction 重写，不复制协议 |
-| Nydus `MAP_PRIVATE` | 评估 `MAP_SHARED`/`MAP_PRIVATE` 与 readonly memslot，做 PSS/安全测试 |
-| stargz/Nydus file prefetch | 从 EROFS metadata/trace生成 range hint |
-| OverlayBD/E2B block COW | 只用于 ext4 writable upper，不替换 readonly pmem lower |
-| CH/QEMU memory restore | 复用 UFFD helper，不复用 rootfs content identity |
-| Kata snapshotter metadata | 映射到 Conch Boot Index/content store，不引入第二套 snapshotter owner |
-| Firecracker external handler | StratoVirt rootfs handler内置，lazyd只做 content service |
+证据入口：[八个问题](08-design-decisions-and-evidence.md)；机制详解：[产品分析](../02-products/)与[横向比较](../03-design-comparison/)。
 
-## 明确拒绝
+## 推荐的第一轮实验组合
 
-- 不直接 rebase 旧 Conch/StratoVirt lazy 分支。
-- 不创建 fake committed snapshot 表示尚未 unpack 的 lazy rootfs。
-- 不把 sparse EROFS cache 整体作为普通 `memory-backend-file`。
-- 不把 fscache on-demand 作为 Linux 6.12+ 新系统唯一依赖。[SRC-EROFS-004]
-- 不让 lazyd 解析 Conch Boot Index 或选择 rootfs component。
-- 不用同一个 `instance_id` 标识 layer、sandbox 和 memory snapshot。
-- 不把 Copy 与 mmap 描述成相同内存复用效果。
-- 不在没有 timeout/fatal channel 时允许 vCPU 进入 faultable region。
-- 不为统一协议而让 rootfs、block diff、RAM page 共用同一 JSON schema。
-- 不把未合入 PR 或实验分支写成上游正式能力。
+选择相同工作负载和镜像内容：
 
-## 需要本地基准后再决定
+1. 完整本地准备，作为正确性和性能基线。
+2. 只读 pmem 按需映射，比较内部/外部 handler。
+3. 整盘块级按需来源，比较读写和 checkpoint 成本。
+4. 选出可行路径后，再分别加入预取与提前映射。
 
-- `MAP_PRIVATE` 对比 `MAP_SHARED` 的 PSS、COW 与安全收益；
-- fetch unit 默认值；
-- PROBE/prefault 是否进入首版；
-- 小镜像直接 full fetch 阈值；
-- background prefetch 并发和带宽预算；
-- 每 layer 一个 pmem device 与预合并 EROFS artifact 的规模上限。
+这不是要求三个仓先实现三套产品功能。用临时 mock/最小原型确认边界，实验代码不进入产品路径。
+
+## 不可接受的结果
+
+- 缺失数据静默变成零，或覆盖恢复后产生的私有写入。
+- 没有可执行的超时/失败策略却允许不可控等待。
+- 未授权共享，或者删除一个 VM 导致其他 VM 数据丢失。
+- 把当前数据正确误当作重启/掉电后也正确。
+- 用未合入 PR、API 名称或本地实验替代整条链路的验证。
+
+不因为某个产品未采纳某 PR，就推断整条技术路线不成立；也不因为相同 syscall 在别处存在，就认定这里已可用。

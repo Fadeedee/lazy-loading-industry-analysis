@@ -1,76 +1,66 @@
-# Checkpoint Template 三路恢复流程
+# Checkpoint 的一致保存与按需恢复
 
-> 阅读完成后，读者能够说明 checkpoint restore 的并行准备、统一 ready barrier、三种 fault 和失败回滚，并据此编写端到端验收用例。
+> 阅读完成后，能够说明一次恢复需要哪些资源、何时可以 resume，以及保存新快照失败后如何保住旧快照。
 
-## 资源解析
+先看[角色级时序图](assets/checkpoint-three-path.html)。文件名保留用于链接稳定；“三类对象”不意味着三套独立服务，也不要求每次恢复必须挂三种设备。
 
-```text
-RestoreSandbox(template name/id)
-  -> Template store resolves immutable Boot Index digest
-  -> validate component closure and captured VMM/config
-  -> Rootfs resource: PreparedRootfs + EROFS descriptors
-  -> Disk resource: writable snapshot parent chain
-  -> Memory resource: full-v1 or incremental-v1 manifest
-  -> VM assets: kernel/initrd/external state
-```
+## 1. 一个 checkpoint 是一组相互匹配的状态
 
-## 并行准备
+Conch 解析发布记录，获取 VM 配置、CPU/设备状态、内存视图和磁盘视图；若采用独立只读 rootfs，再引用对应镜像内容。
 
-```text
-Conch Restore Coordinator
-  |-- A. lazyd restore/prepare rootfs instances
-  |-- B. block backend open parent chain + create writable head
-  |-- C. memory file or conch-cow Attach + inherited memfd
-  `-- D. kernel/initrd/VMM state local availability
-```
+若选择整盘/COW 方案，rootfs 可以已经包含在磁盘视图里，不再额外强制一条 pmem 路径。关键是完整、不可变且相互匹配的资源引用，而不是文件数量。
 
-每路返回：resource identity、ready level、runtime handle/lease和failure channel。任一路准备失败，Conch取消其他任务并按逆序释放已获得资源。
+## 2. 并行准备，但用统一启动门槛
 
-## VMM 构造与 ready barrier
+| 工作 | 责任与完成条件 |
+| --- | --- |
+| 校验恢复资源 | Conch 检查版本、父链、权限和引用闭包 |
+| 建立内容供应 | lazyd/类型适配器可供应需要的范围，未必全量本地化 |
+| 建立磁盘视图 | 后端可读父层，并有本次运行独立的 writable head |
+| 建立 RAM 视图 | 内存索引、backend、fault 处理和写追踪已就绪 |
+| 恢复设备 | StratoVirt 验证地址布局、设备身份和快照兼容性 |
+| 允许运行 | 所需资源确认可服务，错误通道已连接，再由 VMM resume |
 
-1. Conch生成 regular/lazy pmem、writable blk、guest memory和VM state参数。
-2. StratoVirt建立 guest RAM和pmem HVA/AddressSpace/KVM memslots。
-3. memory UFFD source与pmem UFFD handler分别完成交接/启动。
-4. block backend确认可处理读写。
-5. StratoVirt恢复设备/vCPU state，但保持paused。
-6. guest-visible device identity与checkpoint记录匹配。
-7. 所有 resource达到`Faultable`后，Conch允许resume。
+Conch 的协调器不替代后端细节。任何准备步骤失败，取消其他工作并释放本次取得的引用；不能删除仍供其他恢复者使用的内容。
 
-## 运行期三类访问
+## 3. 运行时可以出现不同请求
 
-| guest动作 | 触发 | source | completion |
-| --- | --- | --- | --- |
-| 执行缺失RAM页 | guest memory HVA UFFD | memory snapshot/conch-cow | memfd pwrite + wake |
-| 读只读rootfs | EROFS+DAX pmem HVA UFFD | lazyd OCI cache | FD fixed remap + wake |
-| 读写运行数据 | virtio-blk request | block parent/COW head | block completion |
+| 对象 | 可能的请求入口 | 不能混淆的语义 |
+| --- | --- | --- |
+| 独立只读镜像（若有） | pmem/DAX + UFFD，或文件/块请求 | 不可变内容可复用 |
+| 磁盘视图 | block read/write | 父层继承、显式零、当前私有写入 |
+| RAM 视图 | UFFD 或本地文件 fault | 逻辑页来源、写隔离、dirty generation |
 
-## 创建后续 checkpoint
+内容获取和网络预算可以共享。完成方式按对象区分：块请求完成不等于 UFFD wake，缓存 ready 不等于 RAM 页已恢复，更不等于页未被 guest 写过。
+
+## 4. 保存下一份 checkpoint
 
 ```text
-pause/quiesce
-  -> freeze/flush writable block head
-  -> query memory dirty generation and export delta
-  -> capture external VMM/device state
-  -> publish disk + memory descriptors
-  -> reuse existing immutable PreparedRootfs refs
-  -> build/validate new Boot Index
-  -> atomically advance checkpoint head
-  -> install new disk/memory generations
-  -> resume
+选择一致性级别并进入一致性窗口
+  -> 协调应用/文件系统、磁盘写入和 vCPU 状态
+  -> 导出磁盘变化、内存变化和设备状态
+  -> 校验父链、大小与内容身份
+  -> 持久化所有新对象
+  -> 原子发布引用这些对象的新 checkpoint
+  -> 确认后端世代切换及恢复执行策略
 ```
 
-只有 Boot Index和所有引用发布成功后才推进head。失败后原head仍可恢复；当前运行实例进入是否可继续checkpoint的状态必须明确。
+发布完成前不能把旧 checkpoint 当作垃圾。保存中途失败，需要明确哪些步骤可回滚、哪些会使当前 VM 不能继续执行；不能只写一句“失败后 resume”。
 
-## 验收场景
+## 5. 必须覆盖的端到端场景
 
-- cold/cold：三条source都未缓存；
-- warm rootfs、cold memory；
-- warm memory base、cold rootfs range；
-- rootfs共享的两个VM、各自private writable/memory；
-- parent disk/memory layer缺失；
-- lazyd或conch-cow在首fault时退出；
-- registry/object storage超时和内容校验失败；
-- restore取消时没有遗留VMM、attachment、runtime snapshot或FD；
--新checkpoint失败后旧template仍可恢复。
+- 冷镜像、冷磁盘、冷内存，以及各种部分热缓存组合。
+- 从同一 checkpoint 恢复两个 VM，各自写入后再保存。
+- 多层增量的覆盖、继承、显式零与父层缺失。
+- 运行中保存，再恢复，对拍内存中的值和磁盘中的值。
+- 网络超时、内容损坏、handler/后端退出、用户取消。
+- checkpoint 引用、运行引用和进行中的 I/O 不被 GC 误删。
+- 保存失败后旧 checkpoint 仍能恢复，新记录不会半发布。
 
-该流程借鉴 E2B 的多路径组合、QEMU/CRIU 的 fault-priority 与 Conch PR #155 的 memory lineage，但使用本项目自己的 EROFS+pmem rootfs路径。[SRC-E2B-001] [SRC-QEMU-001] [SRC-CRIU-001] [SRC-CONCH-003]
+这是建议的验证清单，不是本次文档维护已经跑过的测试。
+
+## 参考与选择
+
+E2B 展示内存 UFFD 与磁盘 COW 的组合；QEMU/CRIU 展示 fault 优先的恢复；Conch/StratoVirt 增量快照提案提供本地基线接口。它们支持我们比较实现，不证明某一种组合已经适用于当前项目。[SRC-E2B-001] [SRC-QEMU-001] [SRC-CRIU-001] [SRC-CONCH-003] [SRC-SV-002]
+
+具体取舍见[恢复设计](../../04-conch-design-reference/06-checkpoint-three-path-restore.md)和[决策依据](../../04-conch-design-reference/08-design-decisions-and-evidence.md)。
