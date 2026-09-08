@@ -19,7 +19,7 @@
 | 项目/能力 | 懒加载对象 | 触发入口 | 填充方式 | 状态 | 最后核对版本 | Source ID |
 | --- | --- | --- | --- | --- | --- | --- |
 | Nydus v2 RAFS | rootfs lower | FUSE/virtiofs/EROFS 请求 | chunk fetch + local blob cache | `released` | master `8aa80aee6e77` | [SRC-NYDUS-001] |
-| Nydus RAFSv6 UFFD service | pmem rootfs block view | VMM 传入的 UFFD event | Copy 或 FD+MAP_FIXED | `merged` | master 包含 PR #1921 | [SRC-NYDUS-004] |
+| Nydus RAFSv6 UFFD service | pmem rootfs block view | 服务端监听 VMM 传入的 UFFD FD | 服务端 Copy，或传 FD 由客户端 MAP_FIXED | `merged` | `8aa80aee6e77`；09-08 复核 | [SRC-NYDUS-004] [SRC-NYDUS-005] |
 | Nydus v3 redesign branch | rootfs lower | FUSE/ublk/UFFD/fanotify | EROFS-native chunk cache | `experimental` | `9d769780aeb7` | [SRC-NYDUSV3-001] |
 | stargz snapshotter | rootfs lower | FUSE/VFS file read | eStargz HTTP Range + cache | released | main `c2bf18e5a94d` | [SRC-STARGZ-001] |
 | SOCI v2 | rootfs lower | FUSE/VFS file read | zTOC span fetch + cache | released | v0.15.0 | [SRC-SOCI-002] |
@@ -27,15 +27,15 @@
 | EROFS + CacheFiles on-demand | rootfs lower | kernel EROFS/CacheFiles miss | daemon 写 cache file + ioctl complete | released | Linux 5.19-6.11；6.12 起废弃 | [SRC-EROFS-002] [SRC-EROFS-004] |
 | containerd EROFS snapshotter | rootfs lower + overlay active upper | VFS/mount | 本地 EROFS blob/page cache | merged | main `84ae70638948` | [SRC-EROFS-003] |
 | Firecracker snapshot MAP_PRIVATE | guest RAM | host file page fault | kernel file fault + COW | released | main `9cbb96f9b5b5` | [SRC-FC-001] |
-| Firecracker external UFFD snapshot handler | guest RAM | UFFD missing event | handler UFFDIO_COPY | released | main `9cbb96f9b5b5` | [SRC-FC-002] |
-| Firecracker lazy virtio-pmem #5740 | pmem rootfs | UFFD missing event | image service FD+MAP_FIXED | `proposal` | issue open | [SRC-FC-004] |
-| Cloud Hypervisor on-demand restore | guest RAM | UFFD missing event | internal handler 从 memory-ranges 取页 | released | v53.0 | [SRC-CH-001] |
+| Firecracker external UFFD snapshot handler | guest RAM | UFFD missing event | 自定义 handler；官方示例 COPY | released | `769974664982` 文档；09-08 复核 | [SRC-FC-002] |
+| Firecracker lazy virtio-pmem #5740 | pmem rootfs | UFFD missing event | image service FD+MAP_FIXED | `proposal` | 09-08 仍 open；作者报告原型，非上游能力 | [SRC-FC-004] |
+| Cloud Hypervisor on-demand restore | guest RAM | UFFD missing event | 内部恢复及 offload daemon 按需供页 | released | v53.0；09-08 复核发布说明 | [SRC-CH-001] |
 | Cloud Hypervisor pmem external UFFD #8239 | pmem rootfs/guest RAM | UFFD missing event | external handler Copy 或 FD+MAP_FIXED | closed-unmerged | head `934c76a` | [SRC-CH-002] |
-| QEMU Fast Snapshot Load | guest RAM | postcopy/UFFD fault | mapped-ram offset read + background load | merged | master `99e54ab5e7a6` | [SRC-QEMU-001] |
+| QEMU Fast Snapshot Load | guest RAM | postcopy/UFFD fault | 本地 mapped-ram read + eager load 最终完成恢复 | merged | `35500e5c41ae` 文档；09-08 复核 | [SRC-QEMU-001] |
 | CRIU lazy-pages | Linux process RAM | UFFD missing event | lazy-pages daemon 注页 + background fill | released | criu-dev `c5ba2abb9731` | [SRC-CRIU-001] |
 | Kata + Nydus remote snapshot | container workload rootfs | guest/host file read | FUSE/virtiofs/EROFS backend | released | main `84a479111f1a` | [SRC-KATA-002] |
-| E2B lazy memory | guest RAM | Firecracker UFFD fault | template memfile page supply + prefetch | merged | main `baab2207ee67` | [SRC-E2B-001] |
-| E2B COW rootfs | writable disk | NBD block I/O | read-only template + per-sandbox COW cache | merged | main `baab2207ee67` | [SRC-E2B-001] |
+| E2B lazy memory | guest RAM | Firecracker UFFD fault | PageReader + COPY；独立预取路径 | merged | `cc7c574233ad`；09-08 复核 | [SRC-E2B-001] [SRC-E2B-003] |
+| E2B COW rootfs | writable disk | host NBD block I/O | writable / 可选 sealing / base 读取视图 | merged | `cc7c574233ad`；09-08 复核 | [SRC-E2B-002] [SRC-E2B-004] |
 | CubeSandbox EROFS proposal | rootfs lower | 计划中的 pmem/DAX | 未实现 | closed-unmerged | issue #274 | [SRC-CUBE-001] |
 | urunc shared snapshot view | unikernel/rootfs artifact | shim 准备 view | devmapper read-only view + lease | prototype | discussion #523 | [SRC-URUNC-001] |
 
