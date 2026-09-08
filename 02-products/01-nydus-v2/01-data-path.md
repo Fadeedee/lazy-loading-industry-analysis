@@ -39,7 +39,7 @@ guest EROFS+DAX load
 | 地址定位 | 同文件 `UffdCore::handle_page_fault`：`region.offset + fault_hva - base_hva`，按 region 中的 `page_size` 字段计算处理窗口并裁剪边界 |
 | 后端定位 | [`BlockDevice::fetch_ranges`](https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/service/src/block_device.rs)：metadata blob 按已就绪处理；data blob 先 `async_fetch`；hole 跳过，由 UFFD service zero |
 | 数据完成 | Copy 由 service 读取并 `UFFDIO_COPY`；Zerocopy 发送 FD 与 `blob_offset/block_offset/len`，VMM 客户端承担映射和唤醒 |
-| 协议 | [`uffd_proto.rs`](https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/service/src/uffd_proto.rs)：Handshake/Stat/PageFault 等消息，与本项目 seqpacket FETCH v1 不是同一协议 |
+| 协议 | [`uffd_proto.rs`](https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/service/src/uffd_proto.rs)：Handshake/Stat/PageFault 等消息 |
 
 [SRC-NYDUS-005] [SRC-NYDUS-006] [SRC-NYDUS-007]
 
@@ -54,8 +54,8 @@ guest EROFS+DAX load
 
 ## 重要实现差异
 
-Nydus `VmaRegion` 默认 `prot=PROT_READ`、`flags=MAP_PRIVATE | MAP_FIXED`，实际 mmap 由客户端执行。[SRC-NYDUS-006] PRIVATE 也可共享干净文件页；只有映射允许写入时，写入才会产生 COW，不能把“默认 PRIVATE”解释成默认可写。我们的 SHARED+READ、KVM readonly 和跨 VM PSS 必须分别验证。
+Nydus `VmaRegion` 默认 `prot=PROT_READ`、`flags=MAP_PRIVATE | MAP_FIXED`，实际 mmap 由客户端执行。[SRC-NYDUS-006] PRIVATE 也可共享干净文件页；只有映射允许写入时，写入才会产生 COW，不能把“默认 PRIVATE”解释成默认可写。这不能单独证明 KVM 只读保护或某个工作负载的 PSS 收益。
 
-prefault 使用 `probe_only=true`，只枚举缓存 ready 范围，不代表从远端下载预测内容。另一个边界是错误处理：service fault loop 存在 `handle_uffd_event` 失败仅记 warning 后继续的路径，不能借其已合入状态替本项目的 fatal shutdown 策略背书。[SRC-NYDUS-005]
+prefault 使用 `probe_only=true`，只枚举缓存 ready 范围，不代表从远端下载预测内容。另一个边界是错误处理：service fault loop 存在 `handle_uffd_event` 失败仅记 warning 后继续的路径，服务端已合入不等于所有外部 VMM 集成都具备完整终止策略。[SRC-NYDUS-005]
 
 内容校验也不是无条件执行：[`validate_chunk_data`](https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/storage/src/cache/mod.rs) 受 `need_validation`、CRC32/强制参数及 legacy stargz 分支约束。它可说明校验能力，不能证明所有缓存读取都已通过密码学摘要检查。[SRC-NYDUS-008]

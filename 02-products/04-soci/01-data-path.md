@@ -22,4 +22,4 @@ zTOC 记录可跳转位置和文件到 span 的关系，使运行时不必从 gz
 - 一个 span 可包含多个文件片段；
 - v2 prefetch 可在启动阶段提前拉取 span。
 
-span 越大，range 请求越少但小读取下载放大越高。这个权衡与 lazyd `fetch.unit_bytes` 相似，但 SOCI span 还受 gzip seek/decode 布局约束，不能直接把默认值搬到 EROFS。
+span 越大，range 请求越少但小读取下载放大越高。SOCI span 还受 gzip seek/decode 布局约束，不是任意可选的文件页大小；不能直接把默认值搬到其他镜像格式。

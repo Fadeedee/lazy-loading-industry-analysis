@@ -21,4 +21,4 @@ remote snapshotter 加速只读 workload image；nydus-snapshotter 已提供 FUS
 
 ## 兼容性
 
-guest kernel、VMM transport、agent mount 能力和镜像格式是四个独立版本轴。只验证 host 侧 lazyd/StratoVirt 参数，不足以证明 guest 中 `/dev/pmemN` 和 EROFS+DAX 可用。
+guest kernel、VMM transport、agent mount 能力和镜像格式是四个独立版本轴。只验证 host 启动参数，不足以证明 guest 内对应设备和文件系统组合可用。

@@ -19,7 +19,7 @@ immutable base layers
 - active writer 与 snapshot/commit 需要一致性屏障；
 - 删除 parent 前必须确认没有 child/VM 引用；
 - 远端 layer、local cache 和 runtime upper 的 GC 不能只按路径是否打开判断；
-- 与 VM memory checkpoint 组合时，需要在 Conch 层协调磁盘与 vCPU 的一致性时间点。
+- 与 VM memory checkpoint 组合时，需要在上层协调磁盘与 vCPU 的一致性时间点，块快照本身不包含 VM 内存状态。
 
 ## 共享边界
 

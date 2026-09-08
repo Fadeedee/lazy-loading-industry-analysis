@@ -1,24 +1,29 @@
-# OverlayBD 对 Conch 方案的借鉴
+# OverlayBD：把快照作为分层块视图
 
-> 阅读完成后，读者能够判断为何 Conch 后续增量 rootfs 快照更适合独立块路径，而不是把所有写入塞进只读 pmem/DAX 协议。
+> 阅读后能说明对方解决了什么、哪些经验可用于三仓、选择还需要什么证据。以下借鉴均是建议，不是已冻结接口。
 
-## 直接采用的原则
+## 对方具体做了什么
 
-- immutable lower 与 per-sandbox writable upper 明确分层。
-- snapshot 以 parent lineage 表达，不用镜像 layer index 代替快照身份。
-- block range cache、合并请求和 trace/prefetch 作为可写磁盘路径能力。
-- checkpoint 时由上层协调 block snapshot 与 memory snapshot 一致性。
+逻辑块从最新层查到父层，远端缺失块按需取回。只读历史层上方有可写顶层，commit 或 live snapshot 将变化保存/切换，使新写入进入后续私有状态。
 
-## 需要适配
+第一方参考：[对应文档或源码](https://github.com/containerd/overlaybd/blob/f63addfd8e51bd9eeecc12f5f4670c281a74d6e8/README.md)。[SRC-OVERLAYBD-001] 核查日期与成熟度沿用[来源清单](../../appendix/source-inventory.md)，不是本次重新运行产品。
 
-- 当前只读 EROFS lower 继续走 pmem+DAX；顶层 ext4 writable disk 可走 virtio-blk/block backend。
-- Conch 统一记录 lower content identity、disk snapshot lineage 和 memory snapshot lineage。
-- lazyd 是否扩展 block object backend 应作为独立接口，不污染现有 EROFS FETCH v1。
+完整解释：[读取路径](01-data-path.md)、[缓存与快照生命周期](02-cache-snapshot-lifecycle.md)。
 
-## 不建议采用
+## 三仓怎样共同借鉴
 
-- 不为了统一而把只读 EROFS lower 全部改回块级 ext4。
-- 不让 StratoVirt 理解 OverlayBD layer/OCI 策略。
-- 不把 block cache hit 当作 host file-page 共享的证明。
+| 项目 | 可考虑的改动 |
+| --- | --- |
+| Conch | 管理磁盘谱系、设备布局和 checkpoint 时间点，选择混合镜像/写层还是统一整盘。 |
+| StratoVirt | 提供标准块设备与状态保存，协同排空 I/O；不必解析镜像 tag。 |
+| lazyd | 可供应不可变块层，也可连接专用块后端；共用取数核心不意味着由它承担所有写入实现。 |
 
-这支持“底层镜像 lower 用 pmem+DAX，运行时写入和增量盘用 blk”的组合，而不是要求一个设备同时承担相反的只读共享与可写隔离语义。
+## 选择与差异
+
+整盘块方案是正式候选，不只限于 pmem 上方的 upper。要比较共享内存收益与减少设备/快照复杂度的收益，TCMU/NBD/其他后端另行选型。
+
+## 如何验证
+
+父层优先级、显式零/继承、封存切换、磁盘与 RAM 一致性、双 VM 写入隔离。
+
+回到[联合设计决策](../../04-conch-design-reference/08-design-decisions-and-evidence.md)，比较该经验与其他候选，而不是单独据此定方案。

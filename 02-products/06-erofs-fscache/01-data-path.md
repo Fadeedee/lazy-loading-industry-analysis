@@ -29,4 +29,4 @@ mount EROFS image file
 
 ## EROFS + DAX over pmem
 
-guest EROFS 使用 DAX 时，文件 offset 直接对应 pmem address range，文件数据不先进入 guest page cache。真正的缺失数据供应可在 VMM HVA/UFFD 层发生。这是 Conch 目标路径，与 CacheFiles 的 VFS request 路径不同。
+guest EROFS 使用 DAX 时，文件 offset 直接对应 pmem address range，文件数据不先进入 guest page cache。真正的缺失数据供应可在 VMM HVA/UFFD 层发生。这是虚拟化场景的一种候选，与 CacheFiles 的请求/完成路径不同。

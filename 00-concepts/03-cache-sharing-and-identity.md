@@ -14,7 +14,7 @@
 | host page cache 复用 | 同一 inode+offset 的 file page | 每 VM 的 GVA/GPA/HVA 和页表项 |
 | writable snapshot 复用 | 同一只读 parent/lineage | 每 sandbox 私有写入 |
 
-因此，“两个 VM 指向同一 EROFS 文件”只是共享的必要条件之一。若 handler 使用 `pread + UFFDIO_COPY`，每个 VM 仍会创建自己的匿名物理页；若每个 VM 都 `MAP_SHARED` 同一 cache inode 和 offset，host kernel 才有机会让它们引用同一 file-backed page。
+因此，“两个 VM 指向同一 EROFS 文件”只是共享的必要条件之一。若 handler 使用 `pread + UFFDIO_COPY`，每个 VM 仍会创建自己的匿名物理页；若每个 VM 映射同一 cache inode 和 offset，`MAP_PRIVATE` 的干净页和 `MAP_SHARED` 页都有机会引用同一 file-backed page；私有写入后才产生 COW 分离。
 
 ## 2. 三种对象需要三种身份
 
@@ -26,7 +26,7 @@
 cache identity = digest + format/version parameters
 ```
 
-同一 digest 即使来自不同 tag、image_ref、layer index 或 VM，也应指向同一 sparse cache、bitmap 和 prepared content instance。`instance_id` 可以保留为协议字段，但语义应是 opaque prepared-content identity，而不是 sandbox identity。
+在授权域和格式解释兼容时，同一 digest 即使来自不同 tag、layer index 或 VM，也应具备复用同一内容缓存的条件。内容身份与每次运行的 attachment/lease 要区分；是否使用 instance_id 等字段名由新契约确定，不在概念层冻结。
 
 Nydus、stargz 和 SOCI 都依赖内容摘要或索引中的 chunk/span 校验来建立可复用内容。[SRC-NYDUS-002] [SRC-STARGZ-002] [SRC-SOCI-002]
 
@@ -49,7 +49,7 @@ snapshot_id -> parent_snapshot_id -> immutable base
 - 父快照或 diff lineage；
 - VM 配置和设备状态兼容版本。
 
-不能拿 OCI layer `instance_id` 直接标识 guest RAM。QEMU mapped-ram、Firecracker memory file 和 Cloud Hypervisor restore 都把 memory snapshot 作为独立对象。[SRC-QEMU-001] [SRC-FC-001] [SRC-CH-001]
+不可变内存快照块同样可以用 digest 缓存，但整份 guest RAM 的逻辑视图还需要父链、布局和版本，不能只用一个镜像层身份替代。QEMU mapped-ram、Firecracker memory file 和 Cloud Hypervisor restore 都把 memory snapshot 作为独立对象。[SRC-QEMU-001] [SRC-FC-001] [SRC-CH-001]
 
 ## 3. cache key 要防止什么
 
@@ -61,11 +61,11 @@ snapshot_id -> parent_snapshot_id -> immutable base
 - sandbox 删除时误删仍被其他 VM 使用的内容缓存；
 - bitmap 与 cache 文件来自不同 digest 或 unit size。
 
-建议 cache 目录中保留可验证 header：magic、version、digest、blob size、unit size、slot count。打开已有 cache 时先校验 header，不只信任路径名。
+若采用 sparse file + bitmap，可以用 header 记录 magic、version、digest、blob size、unit size、slot count。其他索引格式也需要相应校验；这不是指定必须沿用某个文件格式。
 
 ## 4. range 状态与持久化顺序
 
-bitmap 的 `ready` 是一个正确性承诺：对应 cache range 已完整写入并可被映射。持久化顺序必须是：
+缓存的 `ready` 是一个正确性承诺：对应范围的字节已完整且可供读取。若用持久 bitmap 记录跨重启有效的 ready，顺序必须是：
 
 ```text
 write complete range
@@ -76,7 +76,7 @@ write complete range
 
 否则崩溃后可能看到 `ready=1`，但 cache 中仍是洞、旧数据或部分写入。`SEEK_DATA/SEEK_HOLE` 只能说明是否分配了 extent，不能证明字节内容与 digest 相符。
 
-清除 ready 也要先让 bitmap 的非 ready 状态可靠可见，再允许修复或覆盖数据。同步频率需要按 fetch unit 批处理评估，但不能牺牲“ready 不早于 data”的约束。
+清除 ready 也要有持久化顺序。已有消费者的文件映射不能在清除标志后就被随意覆盖，修复还必须遵守引用和不可变发布规则。同步频率需要按 fetch unit 批处理评估，但不能牺牲“ready 不早于 data”的约束。
 
 ## 5. 并发请求的 fan-out
 
@@ -93,9 +93,9 @@ VM3 fault --/                              -> 向所有等待者 fan-out ready
 - 当前 faulting VM 应立即收到 fd/range 并 remap；
 - 其他已经阻塞于同一 range 的 VM 也应被唤醒或分别完成 remap；
 - 尚未访问该 range 的 VM 可以等未来 fault，再命中 ready cache；
-- 启动时可选的 PROBE/prefault 可以提前映射已有 ready range，但不是 MVP 正确性的前提。
+- 启动前查询已有缓存、prefetch 和 prefault 可以作为候选优化；三者分别影响内容获取、页驻留和映射，是否启用及何时验证由实验决定。
 
-## 6. 为什么 FD + shared mapping 更适合跨 VM 文件页复用
+## 6. FD + 文件映射怎样复用物理页
 
 ### copy 路径
 
@@ -106,7 +106,7 @@ cache file -> pread/user buffer -> UFFDIO_COPY -> VM1 anonymous page
 
 优点是语义直接、UFFD resolution 成熟。代价是每个 VM 都保留独立匿名页，并发生额外 copy。
 
-### shared mapping 路径
+### 文件映射路径
 
 ```text
 同一 cache inode + offset
@@ -122,17 +122,15 @@ cache file -> pread/user buffer -> UFFDIO_COPY -> VM1 anonymous page
 内容级 cache 的生命期不能绑定单个 VM：
 
 - VM stop/delete 只释放自己的映射和引用；
-- 没有 lease/refcount 前，不应由单 VM cleanup 删除共享 lazyd instance；
+- 没有可靠引用管理前，不应由单 VM cleanup 删除共享内容；
 - cache GC 应考虑引用、最近使用、磁盘水位和恢复中的 in-flight；
-- writable snapshot 和 memory snapshot 使用独立引用图；
+- 磁盘和内存的父链必须分别正确表达，可以纳入同一个带类型的引用图；
 - 强制回收前必须阻止新映射并等待现有 fd/VMA 生命周期闭合。
 
 urunc 的共享 snapshot view 原型还给出一个重要反例：对小镜像增加共享层和 lease 准备成本，可能比直接准备更慢。[SRC-URUNC-001] 因而共享策略需要按对象大小、复用概率和启动关键路径做基准，而不是默认层级越多越好。
 
-## 8. 对当前项目的直接结论
+## 8. 对设计真正有约束力的是什么
 
-- lazyd 以 digest 为 immutable layer 的 canonical identity，并负责 inflight 去重和 ready fan-out。
-- Conch 记录 sandbox 到 prepared content、disk snapshot、memory snapshot 的引用关系。
-- StratoVirt 把 `instance_id` 当 opaque ID，只校验协议和映射范围。
-- `mmap(MAP_SHARED | MAP_FIXED)` 面向 host file page 复用；是否产生实际 RSS/PSS 收益必须用多 VM 基准验证。
-- lease/refcount 可以后续引入，但在此之前 cleanup 策略必须偏保守，避免误删共享 cache。
+应保留的是内容正确性、授权、身份区分、写入隔离和安全回收，而不是某个既有字段名或缓存文件名。Conch 记录运行和快照引用，lazyd 提供内容/缓存能力，StratoVirt 管理地址与设备；三者的接口要共同设计。
+
+候选拆分和多 VM 验证见[决策依据](../04-conch-design-reference/08-design-decisions-and-evidence.md)。

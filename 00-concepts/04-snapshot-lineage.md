@@ -1,4 +1,4 @@
-# 快照谱系与三路恢复
+# 快照谱系与一致恢复
 
 > 阅读完成后，读者能够区分 rootfs 快照、可写磁盘增量和内存快照，理解 checkpoint/template 恢复为什么需要统一编排但不应强行使用同一种懒加载机制。
 
@@ -55,11 +55,11 @@ Template/Checkpoint
 
 OpenSandbox 的 lifecycle 规范提供 snapshot 资源和 restore API，但公开规范本身没有证明底层采用哪种懒恢复机制。[SRC-OPENSANDBOX-001] 这说明 API 层的 snapshot 状态与数据层的 lazy paging 必须分开核实。
 
-## 4. 三路可以并行，但启动门槛不同
+## 4. 对象可以并行准备，但启动门槛不同
 
 ### 路径 A：只读 rootfs lower
 
-启动前只需取得 descriptor、文件系统元数据及足够的 cache/bitmap 状态；文件数据可在 guest 访问时通过 pmem/DAX fault 获取。
+启动前需要可解析的文件系统视图和可服务的数据来源；内容可按文件、块或 pmem/DAX 访问补齐。EROFS/pmem 只是其中一种候选。
 
 ### 路径 B：可写 disk diff
 
@@ -69,20 +69,20 @@ OpenSandbox 的 lifecycle 规范提供 snapshot 资源和 restore API，但公�
 
 启动前必须恢复关键 CPU/设备状态，并为 guest memory 建立可 fault 的地址空间；其余 RAM 页可通过 UFFD/post-copy 取回。
 
-三条路径的就绪状态可以表达为统一资源状态机：
+资源的就绪状态可以表达为统一状态机：
 
 ```text
 Declared -> MetadataReady -> Faultable -> Running -> Materialized/Idle
                     \-> Failed
 ```
 
-但 `Faultable` 的技术含义不同：rootfs 是 lazyd 能供应内容并且 pmem HVA 已注册；disk 是 block parent 可读；RAM 是 snapshot page source 和 UFFD handler 已就绪。
+这里的 `Faultable` 泛指“无需全量物化也可服务访问”，不是所有对象都会产生 UFFD event。文件路径、块后端和 RAM handler 各有自己的完成条件。
 
 ## 5. 为什么需要统一资源管理器
 
 统一管理的重点不是代替每个数据面，而是维护：
 
-- checkpoint 到三类对象的引用；
+- checkpoint 到实际使用对象的引用，rootfs 已在磁盘视图中时不重复增加设备；
 - 父子 lineage 和兼容版本；
 - 各资源是否达到启动门槛；
 - 并行准备与取消；
@@ -108,29 +108,16 @@ QEMU Fast Snapshot Load 使用 postcopy 基础设施和 mapped-ram layout，在�
 
 ### E2B
 
-E2B 同时使用 Firecracker UFFD memory、模板 memfile prefetch、只读 template rootfs、每 sandbox NBD COW cache，并分别导出内存和磁盘 diff。[SRC-E2B-001] 它是“三路分离、上层统一编排”的最完整公开样本之一。
+E2B 同时使用 Firecracker UFFD memory、模板 memfile prefetch、只读 template rootfs、每 sandbox NBD COW cache，并分别导出内存和磁盘 diff。[SRC-E2B-001] 这是上层组合不同恢复机制的具体样本，但不证明必须同时存在独立镜像、独立磁盘和独立内存三个服务。
 
-## 7. 对 Conch + lazyd + StratoVirt 的建议模型
+## 7. 从概念到三仓设计
 
-```text
-Conch Restore Coordinator
-  ├── Rootfs resource -> lazyd -> StratoVirt pmem/UFFD -> guest EROFS+DAX
-  ├── Disk lineage    -> block backend -> guest writable filesystem
-  └── Memory lineage  -> StratoVirt snapshot/UFFD restore
-```
+Conch 适合协调恢复图、发布、取消和生命周期；lazyd 可提供多类不可变对象的内容供应；StratoVirt 提供设备、地址空间和 VM 恢复能力。类型适配器和 handler 的进程归属可以共同调整。
 
-职责建议：
+必须明确的是磁盘写入、内存脏页、不可变缓存 ready 的区别。协议和调度可以复用，不能因复用而丢失这些语义。具体候选见[一致恢复设计](../04-conch-design-reference/06-checkpoint-three-path-restore.md)。
 
-- **Conch**：资源图、策略、启动门槛、并行度、取消、失败状态和生命周期。
-- **lazyd**：不可变内容/范围身份、远端读取、校验、cache 和并发去重。
-- **StratoVirt**：两条明确分离的 UFFD consumer：pmem rootfs fault 与 guest RAM restore；可复用底层 UFFD helper，但不要模糊协议语义。
-- **guest/guestd**：稳定设备映射、EROFS+DAX lower 和 writable upper 组装。
+## 8. 实现前先验证哪几件事
 
-## 8. 分阶段实现顺序
+在 rootfs 冷启动与 checkpoint 恢复之间保留同一资源模型，但可以分阶段交付。先用小实验比较设备和 handler 方案，再完成冷启动闭环，随后验证增量视图与一致保存/恢复。
 
-1. 先稳定 cold rootfs lazy start：验证内容正确性、完整失败传播和多 VM cache/page 复用。
-2. 将 writable upper/block snapshot 作为独立资源纳入 Conch lineage，不改变 rootfs FETCH v1 协议。
-3. 接入 StratoVirt 已有或新增的 guest RAM lazy restore，定义独立 memory source 协议。
-4. 最后实现 checkpoint/template 三路并发恢复、统一 lease/GC 和跨节点分发。
-
-这样可以从第一阶段开始保留最终资源模型，又不会让未验证的三种数据面在一个大协议中互相耦合。
+不预设必须保留某个 FETCH 版本或独立 memory 协议；依据最新上游和实验结果确定契约。执行次序见[开发路线](../04-conch-design-reference/07-phased-roadmap.md)。

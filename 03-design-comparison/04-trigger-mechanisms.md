@@ -1,34 +1,26 @@
-# 触发机制比较
+# 谁发现数据还没到？
 
-> 阅读完成后，读者能够在 FUSE、块 I/O、CacheFiles、fanotify、UFFD 和 postcopy 之间识别事件来源、可见语义与阻塞对象。
+> 触发器决定我们能看到哪些语义，不决定数据服务必须属于哪个项目。
 
-| 机制 | 监听对象 | 知道文件语义 | 阻塞对象 | 供应完成方式 | 典型用途 |
-| --- | --- | --- | --- | --- | --- |
-| FUSE | 文件操作 | 是 | calling thread | FUSE reply | container rootfs |
-| block backend | sector request | 否 | I/O/vCPU | block completion | ext4/disk |
-| CacheFiles | kernel cache range | 部分 | VFS read | write fd + ioctl complete | EROFS on-demand |
-| fanotify pre-content | 文件访问前事件 | 是 | VFS access | daemon fills backing file/response | host filesystem cache |
-| UFFD | registered process HVA | 否 | faulting thread/vCPU | COPY/ZEROPAGE/remap+wake | pmem/RAM |
-| postcopy | missing migration page | RAM block/page | vCPU | page receive/install | VM memory restore |
+| 机制 | 观察对象 | 等待者 | 如何完成 | 参考 |
+| --- | --- | --- | --- | --- |
+| FUSE/文件服务 | 文件操作 | 发起文件访问的线程 | 文件服务 reply | Nydus、stargz、SOCI |
+| 块后端 | sector/block 请求 | I/O 请求及其等待者 | block completion | OverlayBD、E2B |
+| CacheFiles | 内核缓存范围 | 文件读取者 | 填充并报告完成 | EROFS/CacheFiles |
+| fanotify pre-content | 特定文件访问前事件 | 被拦截的文件访问者 | 准备内容并响应 | Nydus v3 实验方向 |
+| UFFD | 注册地址区域的缺页 | 访问该页的线程/vCPU | COPY、ZERO 或经验证的映射/唤醒 | Nydus、Firecracker |
+| postcopy | 迁移/恢复缺页 | vCPU | 页到达并安装 | QEMU |
 
-来源：[SRC-NYDUS-001] [SRC-OVERLAYBD-001] [SRC-EROFS-002] [SRC-NYDUSV3-001] [SRC-FC-002] [SRC-QEMU-001]
+版本和实际实现边界见[来源清单](../appendix/source-inventory.md)。
 
-## 选择不是只看 syscall 次数
+## 选型要问什么
 
-要同时考虑：
+事件是否有文件路径？缺页地址如何变成内容位置？缓存命中是否仍进入服务？缺失范围包含压缩/加密单位吗？服务失败如何结束等待？权限与地址空间由谁维护？
 
-- 需要文件路径还是只需 offset；
-- guest kernel 是否必须改配置；
-- fault handler 是否在安全 sandbox 内可访问 source；
-- warm path 是否仍进入 daemon；
-- 同一次 fault 是否需要网络、解压和校验；
-- failure 能否终止等待者；
-- 目标对象是 immutable data、writable block 还是 volatile RAM。
+UFFD handler 可以在 VMM 内部，也可以外置。外置后它持有 UFFD 不意味着拥有目标进程的普通 mmap 权限。
 
-## 对本项目
+## 本项目范围
 
-- 当前目标暂不考虑 fanotify；已有普通容器/VFS 能力只属于历史兼容范围，不作为本次开发依赖；
-- virtio-pmem+DAX 的 UFFD handler 位于 StratoVirt，lazyd 接收 seqpacket FETCH；
-- 未来 writable snapshot 采用 block request frontend；
-- 未来 memory restore 采用独立 UFFD/postcopy frontend；
-- lazyd core 可以复用内容取数能力，但 frontend-specific metadata 不进入通用 cache identity。
+当前不把 fanotify 作为 guest pmem/DAX 的触发方案：直接地址访问不是 host 文件系统的 VFS 请求。它在产品研究中仍有位置，但不能因此自动加入开发计划。
+
+文件、块、pmem 和 RAM 的触发适配可以连接共同内容核心。是否共用协议和进程要看真实兼容与故障域，不预先规定为独立或统一。

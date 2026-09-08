@@ -1,89 +1,58 @@
-# 缓存、去重与预取比较
+# 网络慢时，怎样让业务更快可用？
 
-> 阅读完成后，读者能够把 cache identity、ready bitmap、inflight 去重、prefetch 和 prefault 分成独立机制，并为它们设置可测指标。
+> 多拉数据不一定更快。把内容缓存、预测下载和提前映射分开，才能判断各自有没有收益。
 
-## 五个不同动作
+## 五个动作
 
-| 动作 | 解决的问题 | 例子 |
+| 动作 | 解决什么 | 不意味着什么 |
 | --- | --- | --- |
-| persistent cache | 下次不再远端下载 | Nydus blob cache、SOCI span cache |
-| inflight dedup | 并发请求不重复下载 | per digest/range future/lock |
-| prefetch | fault 前取远端数据 | eStargz prioritized files、Nydus trace |
-| prefault/PROBE | fault 前建立本地映射 | Nydus UFFD prefault、FC #5740 PROBE |
-| background fill | 执行恢复后最终物化 | QEMU/CRIU memory pages |
+| 持久内容缓存 | 下次少下载 | VM 已有映射 |
+| inflight 去重 | 并发请求不重复取数 | 所有等待者都已成功 |
+| 工作集/预测预取 | 访问前取回可能需要的内容 | 取回的数据一定被用到 |
+| prefault/提前映射 | 减少第一次地址访问的处理 | 必须从远端下载新内容 |
+| 后台物化 | 让恢复逐步完成 | 一定只是可随时取消的预测任务 |
 
-来源：[SRC-NYDUS-001] [SRC-NYDUS-004] [SRC-STARGZ-002] [SRC-SOCI-002] [SRC-QEMU-001] [SRC-CRIU-001]
+[eStargz](../02-products/03-stargz/01-data-path.md)的 prioritized files、[Nydus](../02-products/01-nydus-v2/01-data-path.md)的 prefetch/prefault、[QEMU](../02-products/09-qemu/01-data-path.md)的后台恢复处于不同层次，不是同一个算法。
 
-## 身份
+## 三仓提供不同信息
 
-- immutable layer：digest + format/version/security domain；
-- fetch state：content identity + aligned range/unit；
-- writable snapshot：snapshot ID + parent lineage；
-- memory page：memory snapshot ID + RAM block/page offset。
+**Conch** 知道这是冷启动还是恢复、用户 deadline、Template 工作集、节点并发与预算。
 
-## 粒度调节
+**StratoVirt 或外部 handler** 知道访问流、缺页等待和哪些区域已经安装。是否导出这些观测需权衡成本与隐私。
 
-fetch unit 越大，网络往返少但下载放大高；越小，首次访问精确但 bitmap、HTTP 和 syscall 开销增加。SOCI span、Nydus chunk/compression group 和 lazyd unit 都体现相同权衡，但默认值不能跨格式照搬。[SRC-SOCI-002] [SRC-NYDUSV3-001]
+**lazyd/数据服务** 知道缓存、远端请求、鉴权、排队和传输成本，负责有界调度和去重。
 
-## 预取策略层级
+因此可以增加必要的访问流、优先级或预算协商，而不是把所有判断固定在某个现有请求格式里。
 
-1. static：固定首段/metadata；
-2. build hint：构建时文件列表；
-3. runtime trace：历史工作集；
-4. adaptive：连续访问/邻近 range；
-5. fleet coordination：同节点并发只 warm 一次。
+## 先测纯按需，再独立加入优化
 
-## 面向 lazyd 的自适应预取建议
+1. 纯按需为基线，记录网络/鉴权、排队、传输、校验和页完成时间。
+2. 加可关闭、有上限的顺序预取，验证实际利用率。
+3. 加 Template 历史工作集预取，明确绑定的镜像/快照版本。
+4. 单独测试提前映射本地 ready 范围，记录额外启动等待。
+5. 有稳定样本后再加延迟/吞吐反馈，而不是凭第一次慢请求扩大下载。
 
-以下是本项目的待实现设计建议，不代表现有代码已经支持，也不代表业界方案已经证明它在本项目中有效。
+| 观察 | 可以尝试 | 必须限制 |
+| --- | --- | --- |
+| 连续读取、请求固定开销高、吞吐足够 | 扩大预测窗口、合并相邻范围 | 最大窗口、带宽、下载放大 |
+| 随机读取或预测命中低 | 收缩预测，恢复按需 | 避免窗口频繁振荡 |
+| 前台排队、超时或拥塞 | 暂停/缩小后台任务 | 为前台预留容量 |
+| 首次鉴权/冷连接慢 | 继续采样、复用连接 | 不把首字节耗时直接等同 RTT |
 
-首次 FETCH 慢不能直接触发扩大下载范围：连接建立、Bearer 鉴权、服务端处理、网络往返和带宽限制都可能造成等待。应分别记录连接/鉴权耗时、首字节等待、传输耗时、吞吐和前台排队时间，结合近期多个请求及访问连续性判断；首字节等待只能作为综合延迟信号，不能直接等同于网络 RTT。
+这是本项目建议，不声称参考项目已实现同一套反馈算法。
 
-| 观察条件 | 建议动作 |
-| --- | --- |
-| 连续访问、高固定请求开销、传输吞吐充足 | 逐步扩大向后预取窗口，合并相邻基础单位 |
-| 随机访问或预取利用率低 | 缩小窗口，回到按需读取 |
-| 前台排队、超时增多、带宽预算不足 | 限制或暂停后台预取，为前台保留容量 |
-| 单次慢请求、冷连接或首次鉴权 | 收集后续样本，保持当前窗口 |
+## 正确性不随预取策略改变
 
-### 前台完成与后台预测分离
+已发出的远端请求可能不可抢占，队列优先级不能保证前台完全不受影响。后台需要限制请求大小和并发。前台命中在途预取时复用任务并提升优先级，失败不能标记 ready。
 
-```text
-FETCH 当前缺失范围
-  -> 按固定 unit 放大，优先 ensure_range
-  -> 当前范围写入并持久化，bitmap ready
-  -> 立即返回当前 ready range + cache FD
-  -> 后台在预算内预取后续范围
-```
+若选固定单位 bitmap，单位属于持久格式，动态调整的是预测窗口；也可以选择其他缓存格式再定义其粒度。物理 fault page、网络请求、校验单位和映射单位不得混为一谈。
 
-后台预测范围不得成为当前 FETCH 返回的前置条件。已经发送的 HTTP 请求未必能够抢占，因此需限制单次后台请求大小和并发，并为前台保留下载容量；不能仅靠队列排序宣称前台不会受影响。
+准备阶段是否等待工作集，是 Conch 可观察的策略；运行阶段当前需求满足后不必等待无关预测范围。内存后台物化还要遵守页代次，防止覆盖恢复后的写入。
 
-当新前台请求落入预取中的范围时，复用相同 inflight 状态，将等待任务提升为前台优先级，避免重复下载；预取失败不得标 ready，后续前台访问仍可按正常错误/重试策略取数。
+## 验收
 
-### 固定 bitmap 单位，动态预取窗口
+full、纯按需、预取、提前映射分组对照。覆盖小/大镜像、单/多 VM、冷/热 cache、顺序/随机访问、高延迟/限带宽/抖动网络。
 
-`fetch.unit_bytes` 继续作为持久 bitmap 的固定基础单位。动态调整的是预取单位数量、窗口和并发，不修改已有 bitmap header 的 unit，也不改变 FETCH v1 JSON 或 cache FD 语义。
+记录业务可用时间、首次请求、fault p50/p99、实际远端字节、下载放大、预取利用率、排队和 PSS。预取利用率要有固定观测窗口；网络模拟仅在隔离代理或 network namespace 里进行。
 
-预取只推进本地内容 ready，不会自动建立其他 VM 的 HVA 映射。VM 后续访问仍可能触发 UFFD，但可命中缓存；它与 PROBE/prefault 是独立能力。
-
-窗口按内容访问流观察，网络预算按远端和节点汇总；多个 VM 的请求合并后可能看起来随机，因此不能只用全局相邻 offset 推断每个 VM 的连续性。v1 无访问流标识时，先采用保守的内容级判断，不新增跨仓字段。
-
-### 配置与落地顺序
-
-由 lazyd 集中管理启用开关、初始/最大窗口单位数、后台并发、带宽预算、观测窗口和收缩条件。具体配置字段及默认值在实现前冻结，本阶段不新增 API 契约。所有预测范围必须检查加法溢出并裁剪到真实 blob 边界，尾页零填充继续沿用已有规则。
-
-先实现可关闭、有上限的顺序预取，并测量利用率；再加入延迟/吞吐反馈和扩大、收缩阈值，避免频繁振荡。启用前以关闭预取为基线，证明应用可用时间和首次请求收益，且没有不可接受的尾延迟或下载放大。
-
-## 验收指标
-
-- cold pull bytes、first-fault p50/p99；
-- fetch amplification = remote bytes / requested useful bytes；
-- duplicate remote bytes under N VMs；
-- cache disk allocated bytes；
-- prefetched-but-unused bytes；
-- HVA RSS/PSS 和 host page-cache reuse；
-- background I/O 对业务 fault 的排队影响。
-
-没有实测前，只能把预取和共享描述为预期收益。
-
-新增测试矩阵应覆盖低延迟、高延迟、限带宽、抖动/超时四类网络，顺序/随机访问及单 VM/多 VM，比较 full、lazy 无预取和 lazy 有预取。记录应用可服务时间、首次业务请求、fault p50/p99、前台排队、远端字节和预取利用率；预取利用率按固定观测窗口内真正被需求访问的预取字节计算，避免把后台下载完成误当成收益。网络模拟应限定在测试代理或独立 network namespace 内。
+没有实测前，保持策略可关闭，不预设自动切换默认阈值。

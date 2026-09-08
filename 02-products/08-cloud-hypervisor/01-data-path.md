@@ -22,4 +22,4 @@ release note 不足以证明其 PMEM rootfs 数据协议；本文不把未由源
 
 该 PR 的 external UFFD protocol 让 VMM 传 UFFD 和 memory/pmem region；对 PMEM 可由 handler copy，也可返回 FD mapping region 给 VMM fixed remap。[SRC-CH-002]
 
-技术路径与 Conch 目标相近，但最终状态是 `closed-unmerged`。它可用来理解接口和 review 风险，不能作为上游 ABI 依赖。
+该 PR 的核查状态是 `closed-unmerged`。它可用来理解接口和 review 风险，不能作为上游 ABI 依赖。

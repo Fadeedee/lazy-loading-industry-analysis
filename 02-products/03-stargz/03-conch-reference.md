@@ -1,22 +1,29 @@
-# stargz 对 Conch 方案的借鉴
+# eStargz：把启动工作集提前准备
 
-> 阅读完成后，读者能够把 stargz 的文件级经验转化为 lazyd 的元数据、校验、预取和观测要求，而不会错误复用其 FUSE 数据面。
+> 阅读后能说明对方解决了什么、哪些经验可用于三仓、选择还需要什么证据。以下借鉴均是建议，不是已冻结接口。
 
-## 直接采用
+## 对方具体做了什么
 
-- 元数据优先、小数据先达到 mountable/faultable 状态。
-- 每个可独立读取单位保存 digest，首次读取必须校验。
-- prioritized-file/trace 驱动的启动工作集预取。
-- 将 pull、mount-ready、first-read、background fetch 分开观测。
+eStargz 的 TOC/chunk 支持按文件范围读取；prioritized files 放在 landmark 前，文档描述在容器运行前预取这段数据。它把构建时的文件顺序与运行时准备结合，而不是只靠在线扩大窗口。
 
-## 需要适配
+第一方参考：[对应文档或源码](https://github.com/containerd/stargz-snapshotter/blob/c2bf18e5a94dcfd959cabf744f4bbb4ef8d980a2/docs/estargz.md)。[SRC-STARGZ-002] 核查日期与成熟度沿用[来源清单](../../appendix/source-inventory.md)，不是本次重新运行产品。
 
-- lazyd 的输入是原生 EROFS descriptor，不是 eStargz TOC。
-- DAX fault 只有 offset，若要 file-aware prefetch，需要从 EROFS metadata 或离线 trace 建立反向关系。
-- Conch 的 prepare 与 containerd remote snapshotter 生命周期不同，应复用原则而非 API。
+完整解释：[读取路径](01-data-path.md)、[缓存与快照生命周期](02-cache-snapshot-lifecycle.md)。
 
-## 不建议采用
+## 三仓怎样共同借鉴
 
-- 不把 FUSE 放进 StratoVirt fault path。
-- 不为兼容普通 tar/gzip 牺牲原生 EROFS+DAX 所需的对齐和可映射布局。
-- 不把 rootfs snapshotter 当 VM checkpoint manager。
+| 项目 | 可考虑的改动 |
+| --- | --- |
+| Conch | 构建、转换和 Template prepare 都可携带版本化工作集；决定是否等待预取并计入启动时间。 |
+| StratoVirt | 若走 DAX，访问只看到地址，需要额外索引/trace 才能还原文件工作集；也可比较文件服务路线。 |
+| lazyd | 执行有界预取、缓存校验和前台去重，按可用信息选择文件或范围策略。 |
+
+## 选择与差异
+
+可以借鉴工作集方法而不采用 eStargz 格式；若普通 OCI 兼容成本更重要，也可把该文件路线纳入候选。不要在比较前排除 FUSE/virtiofs。
+
+## 如何验证
+
+无预取、工作集预取、在线预测的业务首请求和下载放大；工作集版本失配应被拒绝。
+
+回到[联合设计决策](../../04-conch-design-reference/08-design-decisions-and-evidence.md)，比较该经验与其他候选，而不是单独据此定方案。

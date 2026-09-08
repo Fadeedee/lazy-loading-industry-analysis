@@ -15,4 +15,4 @@ Kata 的不同部署可以把文件系统 daemon 放在 host 或 guest，传输�
 
 guest asset rootfs 不能和 workload rootfs 混淆：前者用于启动 VM 用户态/agent，后者是某个容器的镜像层。[SRC-KATA-001]
 
-对 Conch 来说，guestd 类似 guest 内负责 mount/组装的 agent；StratoVirt 类似 VMM；lazyd 类似独立 image service，但协议和镜像格式由本项目定义。
+这些边界用于区分 host runtime、VMM 和 guest agent，并不限定新的系统必须采用同样协议。对本项目的取舍单列在[借鉴分析](03-conch-reference.md)。

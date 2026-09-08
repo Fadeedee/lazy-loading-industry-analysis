@@ -61,15 +61,15 @@ guest 文件系统 read
 ```text
 guest 读取 EROFS+DAX 文件
   -> guest 页表把文件 offset 映射到 pmem GPA
-  -> KVM 通过 memslot 找到 StratoVirt HVA
+  -> KVM 通过 memslot 找到 VMM HVA
   -> HVA missing fault
   -> UFFD event
-  -> FETCH cache fd/range
-  -> mmap(MAP_FIXED) 或 UFFDIO_COPY
+  -> 用户态 handler 定位并请求内容范围
+  -> VMM 文件重映射或 handler 注页
   -> wake vCPU
 ```
 
-DAX 绕过 guest 文件数据 page cache，把文件访问变成对 pmem 映射区的 load。UFFD 监听的是 **StratoVirt 进程中的 HVA range**，并不直接监听 GVA 或 GPA。Nydus 已合入的 UFFD block service同时提供 Copy 与 Zerocopy 路径。[SRC-NYDUS-004] Firecracker #5740 描述了相似的 FD passing + fixed remap 方案，但仍是提案。[SRC-FC-004]
+DAX 绕过 guest 文件数据 page cache，把文件访问变成对 pmem 映射区的 load。UFFD 监听的是 **VMM 进程中的 HVA range**，并不直接监听 GVA 或 GPA。Nydus 已合入的 UFFD block service同时提供 Copy 与 Zerocopy 路径。[SRC-NYDUS-004] Firecracker #5740 描述了相似的 FD passing + fixed remap 方案，但仍是提案。[SRC-FC-004]
 
 ## 3. 地址如何关联
 
@@ -89,7 +89,7 @@ guest process GVA
 - **KVM memslot** 描述一段 GPA 对应哪段 HVA，它不是逐页页表。
 - **UFFD registration** 告诉 host kernel：这段 HVA 的 missing fault 交给用户态 handler。
 
-fault offset 通常按 `fault_hva - base_hva` 计算，再与 `blob_size`、`pmem_size` 和 page size 校验。
+对单个线性 pmem 区域，可按 `fault_hva - base_hva` 得到设备内 offset，并校验内容和设备边界。复合磁盘或增量内存视图还需要索引，不能直接把设备 offset 当成某层文件 offset。
 
 ## 4. resolution 不等于 wake
 
@@ -103,9 +103,9 @@ handler 将用户缓冲区中的字节复制到 faulting anonymous page。除非
 
 为确定语义就是零的范围建立零页，适合 `round_up(blob_size, page_size)` 之后的 pmem padding。不能用它处理 sparse cache 中“尚未下载但真实内容未知”的洞。
 
-### `mmap(MAP_SHARED | MAP_FIXED)` + wake
+### 文件 `mmap(MAP_FIXED)` + wake
 
-VMM 用 lazyd 返回的 cache fd 和 `dev_off` 覆盖 faulting HVA 子区间。新的 VMA 是 file-backed mapping，后续读由 host page cache 支持；多个 VM 映射同一 inode+offset 时具备共享文件页的条件。固定重映射本身不等同于完成 UFFD wait，因此需要明确的 wake/resolve 操作。Nydus 已合入实现和 Cloud Hypervisor 未合入 PR 都提供了这一机制的工程证据。[SRC-NYDUS-004] [SRC-CH-002]
+VMM 用已就绪文件的 fd 和文件 offset 覆盖目标 HVA 子区间。`MAP_PRIVATE` 与 `MAP_SHARED` 的干净文件页都可能共享；写入语义不同，不能只凭共享目标决定标志。新的 VMA 是 file-backed mapping，后续读由 host page cache 支持；多个 VM 映射同一 inode+offset 时具备共享文件页的条件。固定重映射本身不等同于完成 UFFD wait，因此需要明确的 wake/resolve 操作。Nydus 已合入实现和 Cloud Hypervisor 未合入 PR 都提供了这一机制的工程证据。[SRC-NYDUS-004] [SRC-CH-002]
 
 ### 普通 file-backed fault
 
@@ -121,31 +121,26 @@ VMM 用 lazyd 返回的 cache fd 和 `dev_off` 覆盖 faulting HVA 子区间。�
 | fetch 粒度 | 1 MiB unit、SOCI span | 减少网络往返 |
 | 校验粒度 | chunk/span/digest unit | 保证内容完整性 |
 | 落盘粒度 | ready range | 持久化与 recovery |
-| remap 粒度 | lazyd 返回的 page-aligned ready range | 降低后续 fault 次数 |
+| remap 粒度 | 来源返回的 page-aligned ready range | 降低后续 fault 次数 |
 | prefetch 粒度 | 启动工作集或 trace range | 隐藏串行 fault 延迟 |
 
-StratoVirt 不应把 lazyd 返回的放大 range 缩回单个 fault page；只要范围、文件长度和 pmem 边界校验通过，映射完整 ready range 才能利用数据面放大和 host page cache。
+文件映射方案可以一次映射经过校验的完整 ready range，以减少后续 fault；也可以按映射预算分批处理。fetch、映射和预取粒度不必相等，必须保证响应覆盖实际等待范围。
 
 ## 6. 失败时谁负责结束等待
 
 fault 路径最危险的失败不是返回错误，而是 vCPU 永久阻塞且没有上层状态变化。可靠实现至少需要：
 
-- FETCH 超时和有界重试；
+- 请求 deadline、取消和有界重试；
 - request ID 与 response 校验；
 - digest/range/file size/alignment 校验；
-- 失败日志包含 VM、region、instance、offset；
+- 失败日志包含 VM、region、内容/视图身份和 offset；
 - handler 失败能够上报 VMM 级 fatal error，并触发 VM shutdown 或明确失败状态；
 - 不能把未经校验的数据映射到 guest 可读地址。
 
-Cloud Hypervisor #8239 的 review 也说明：把 PMEM fault 与 snapshot restore 共用外部协议不是天然合理，必须先定义功能边界和失败模型。[SRC-CH-002]
+Cloud Hypervisor #8239 的 review 对 PMEM 和 snapshot 协议的职责提出疑问。这提醒我们定义类型、兼容性和失败模型，但不能据此推导出“公共框架或公共协议不可行”。[SRC-CH-002]
 
-## 7. 对当前项目的映射
+## 7. 角色确定后，再决定放在哪个进程
 
-| 阶段 | 主要责任方 |
-| --- | --- |
-| 选择 OCI layer / snapshot | Conch |
-| digest、range、下载、校验、bitmap、cache fd | lazyd |
-| HVA、memslot、UFFD、FETCH client、remap、wake | StratoVirt |
-| `/dev/pmemN` 识别、EROFS+DAX、overlay | guest/guestd |
+HVA 的实际映射由 VMM 执行，但接收 UFFD event、定位来源和请求内容可以在内部或外部。外部 handler 若选择文件重映射，就需要 VMM 执行映射的控制通道；不能直接用自身 mmap 改写另一个进程。
 
-这条边界让 lazyd 不需要理解 KVM，让 StratoVirt 不需要理解 OCI，也使未来的 guest RAM lazy restore 可以保留独立后端。
+Conch 的生命周期、lazyd 的供应能力和 StratoVirt 的设备/地址空间可以一起调整。具体候选与实验门槛见[联合决策](../04-conch-design-reference/08-design-decisions-and-evidence.md)，不从本页示例反推固定协议或进程拓扑。

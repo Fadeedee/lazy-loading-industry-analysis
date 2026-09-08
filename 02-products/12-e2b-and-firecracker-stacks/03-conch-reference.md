@@ -1,26 +1,29 @@
-# E2B 对 Conch 方案的借鉴
+# E2B：从完整沙箱恢复反推数据服务
 
-> 阅读完成后，读者能够把 E2B 的完整沙箱资源模型映射到 Conch，同时保留 EROFS+DAX 的自有优势。
+> 阅读后能说明对方解决了什么、哪些经验可用于三仓、选择还需要什么证据。以下借鉴均是建议，不是已冻结接口。
 
-## 直接采用
+## 对方具体做了什么
 
-- template/checkpoint 明确引用 memory、rootfs base 和 writable diff。
-- sandbox startup 对多条 backend 做并行 prepare 和统一 ready barrier。
-- fault-priority + bounded prefetch。
-- memory diff 与 disk diff 分别生成、分发和恢复。
-- template cache 与 sandbox-private COW 生命周期分离。
+沙箱恢复组合内存 UFFD 与 host NBD/COW rootfs。块 overlay 读取按 writable、可选 sealing、base 的顺序，新写入进入当前私有 cache；RAM 则由独立 PageReader/fault 流程供应。
 
-## 需要适配
+第一方参考：[对应文档或源码](https://github.com/e2b-dev/infra/blob/cc7c574233ad98665a7c72a3d37b0af89ae79a71/docs/ARCHITECTURE.md)。[SRC-E2B-001] [SRC-E2B-002] [SRC-E2B-003] 核查日期与成熟度沿用[来源清单](../../appendix/source-inventory.md)，不是本次重新运行产品。
 
-- Conch 的 immutable lower 使用原生 EROFS+pmem+DAX，而不是把整盘都放进 NBD。
-- writable ext4 upper/增量 disk 可借鉴 NBD/block COW，并继续通过 StratoVirt virtio-blk 暴露。
-- StratoVirt 同时具备 pmem fault 与 memory restore 时，应保留两类 region/source。
-- lazyd 可服务 immutable range，但 writable block diff 需要独立 object type/protocol。
+完整解释：[读取路径](01-data-path.md)、[缓存与快照生命周期](02-cache-snapshot-lifecycle.md)。
 
-## 不建议采用
+## 三仓怎样共同借鉴
 
-- 不因为 E2B 使用 NBD 就放弃 EROFS file-page 映射复用目标。
-- 不把 template ID 当 OCI digest。
-- 不在第一阶段同时重建 E2B 的整套分布式控制面。
+| 项目 | 可考虑的改动 |
+| --- | --- |
+| Conch | 从 Template/checkpoint 一致资源图组织恢复、私有写层、后台任务和回收，用户 API 不被单一数据面主导。 |
+| StratoVirt | 同时接入设备和内存恢复，管理运行时访问及失败；不要求与 Firecracker 完全相同的接口。 |
+| lazyd | 可共用磁盘历史块/内存快照的内容核心，类型适配维护不同逻辑视图和完成语义。 |
 
-E2B 最值得采纳的是资源图和生命周期，不是具体设备选择。
+## 选择与差异
+
+把整盘块快照当正式候选，与 pmem 镜像+写层组合对照。E2B 是机制和编排样本，不意味着要重建它的分布式控制面；源码中的 onFailure 不替代本项目终止策略。
+
+## 如何验证
+
+二次快照、封存中读取、父层恢复、私有写入、节点冷缓存和整体业务延迟。
+
+回到[联合设计决策](../../04-conch-design-reference/08-design-decisions-and-evidence.md)，比较该经验与其他候选，而不是单独据此定方案。

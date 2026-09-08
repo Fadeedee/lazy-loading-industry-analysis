@@ -1,24 +1,29 @@
-# EROFS/CacheFiles 对 Conch 方案的借鉴
+# EROFS/CacheFiles：区分文件格式和缺失内容机制
 
-> 阅读完成后，读者能够选择 EROFS 作为稳定镜像格式，同时避免把已退场的 fscache on-demand ABI固化成新的跨仓依赖。
+> 阅读后能说明对方解决了什么、哪些经验可用于三仓、选择还需要什么证据。以下借鉴均是建议，不是已冻结接口。
 
-## 直接采用
+## 对方具体做了什么
 
-- 原生 EROFS 作为只读、可验证、可 DAX 映射的 rootfs lower。
-- file-backed mount/page cache 作为 range 已物化后的标准本地读取路径。
-- active writable upper 与 immutable lower 分离。
-- CacheFiles 的 request/complete、对象身份和 daemon crash recovery 思路。
+CacheFiles on-demand 用对象/范围请求通知用户态，用户态填充数据并报告读取完成。普通 EROFS file-backed mount 依赖文件已有可靠字节，文件稀疏洞不会自动变成远端请求。
 
-## 需要适配
+第一方参考：[对应文档或源码](https://docs.kernel.org/filesystems/caching/cachefiles.html)。[SRC-EROFS-002] [SRC-EROFS-004] 核查日期与成熟度沿用[来源清单](../../appendix/source-inventory.md)，不是本次重新运行产品。
 
-- 远端未就绪状态由 lazyd bitmap 表达，不能由 sparse hole 单独表达。
-- guest DAX fault 在 StratoVirt UFFD 处理，不依赖 guest VFS 到 host CacheFiles 回调。
-- kernel capability probe 应检查 EROFS+DAX，而不是假设所有内核都支持相同 mount option。
+完整解释：[读取路径](01-data-path.md)、[缓存与快照生命周期](02-cache-snapshot-lifecycle.md)。
 
-## 不建议采用
+## 三仓怎样共同借鉴
 
-- 不新建对 Linux 6.12 已标记废弃的 EROFS fscache on-demand ABI 的长期硬依赖。[SRC-EROFS-004]
-- 不把 sparse EROFS cache 直接整体传给普通 `memory-backend-file`。
-- 不把 EROFS readonly lower 用作 ext4 writable snapshot 的替代品。
+| 项目 | 可考虑的改动 |
+| --- | --- |
+| Conch | 根据目标内核、挂载路径和布局选择 rootfs 方案；可以复用正确的 snapshotter/mount 契约。 |
+| StratoVirt | 若选 pmem/DAX，需要真正拦截缺失地址访问，并验证设备与映射权限。 |
+| lazyd | 提供确定对象的内容和完成状态；不把文件洞作为可信下载索引。 |
 
-最终组合应是：lazyd 供应可信 EROFS ranges，StratoVirt 将 ready file range 映射到 pmem HVA，guest 以 EROFS+DAX 只读挂载。
+## 选择与差异
+
+借鉴请求/完成与对象管理，重新核对 EROFS fscache on-demand 的内核支持和维护限制，不把它作为无需验证的新依赖。EROFS 格式并不强制某一种设备路径。
+
+## 如何验证
+
+guest kernel 能力、真实缺失数据读取、尾部零、服务退出和缓存恢复。
+
+回到[联合设计决策](../../04-conch-design-reference/08-design-decisions-and-evidence.md)，比较该经验与其他候选，而不是单独据此定方案。

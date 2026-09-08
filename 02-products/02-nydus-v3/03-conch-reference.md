@@ -1,25 +1,29 @@
-# Nydus v3 对 Conch 方案的借鉴
+# Nydus v3：把内容能力与访问入口拆开
 
-> 阅读完成后，读者能够判断哪些 v3 架构思想适合现在吸收，哪些需要等待上游稳定或本地验证。
+> 阅读后能说明对方解决了什么、哪些经验可用于三仓、选择还需要什么证据。以下借鉴均是建议，不是已冻结接口。
 
-## 直接采用的思想
+## 对方具体做了什么
 
-- lazyd 内部把 OCI backend、EROFS 解析、cache、bitmap 和 prefetch 做成共享 core。
-- 借鉴接口与内容核心分层：当前 lazyd 提供 HTTP control 和 seqpacket FETCH，复用内容供应逻辑；UFFD handler 位于 StratoVirt。
-- dedup identity 与 compression/fetch unit 解耦。
-- 并发 VM 对同一 digest/range 使用 inflight 去重和完成 fan-out。
-- 预取根据 trace/工作集生成，不把固定全量 read-ahead 当唯一策略。
+实验分支围绕原生 EROFS、内容去重与压缩/取数粒度、工作集预取及多种入口组织能力。它提供可研究的方向，不等于所有前端已经成熟或性能可以直接搬用。
 
-## 需要适配
+第一方参考：[对应文档或源码](https://github.com/dragonflyoss/nydus/blob/9d769780aeb7/README.md)。[SRC-NYDUSV3-001] 核查日期与成熟度沿用[来源清单](../../appendix/source-inventory.md)，不是本次重新运行产品。
 
-- 当前 lazyd 已有 v1 bitmap/FETCH 协议，应渐进重构 core，不为追随实验分支从头重写。
-- Conch 的 rootfs、writable disk 和 guest RAM 资源图高于 Nydus image core，不能下沉到 lazyd。
-- StratoVirt 只消费稳定数据面，不依赖实验 CLI 或 on-disk format。
+完整解释：[读取路径](01-data-path.md)、[缓存与快照生命周期](02-cache-snapshot-lifecycle.md)。
 
-## 暂不采用
+## 三仓怎样共同借鉴
 
-- 不承诺 v3 artifact/API 兼容。
-- 不直接引用分支性能数字作为项目验收目标。
-- 当前目标不引入 fanotify，也不照搬 Nydus v3 的全部 FUSE、NBD、ublk、UFFD frontend；已有 fanotify 能力仅属历史兼容范围。
+| 项目 | 可考虑的改动 |
+| --- | --- |
+| Conch | 可以在构建/prepare 阶段生成与确定镜像版本绑定的索引和工作集。 |
+| StratoVirt | 消费选定的逻辑布局和 source 能力，不必理解具体压缩存储格式。 |
+| lazyd | 可共用对象、缓存、调度核心，并按镜像/磁盘/内存增加适配，不受现有 API 名称限制。 |
 
-最合理的近期路径是：保留现有三仓实现边界，用 v3 的 core/frontend 分层审视 lazyd 重构，而不是替换整个项目。
+## 选择与差异
+
+区分去重、压缩、校验、请求和映射粒度；不要为了抽象完整而一次实现所有前端。fanotify 不作为当前 guest pmem/DAX 入口。
+
+## 如何验证
+
+索引正确性、压缩随机读放大、格式升级、多个入口并发取数和实际业务收益。
+
+回到[联合设计决策](../../04-conch-design-reference/08-design-decisions-and-evidence.md)，比较该经验与其他候选，而不是单独据此定方案。

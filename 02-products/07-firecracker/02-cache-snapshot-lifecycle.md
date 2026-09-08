@@ -16,4 +16,4 @@ full memory snapshot 可独立恢复；diff snapshot 记录自上次跟踪点以
 
 ## UFFD 失败
 
-官方文档明确指出：handler 不处理 fault 时 Firecracker 会等待，可能永久挂起；使用者需要监控 handler、设置 timeout，并在 handler 错误时终止 peer VM。[SRC-FC-002] 这是 Conch/StratoVirt 必须补齐 VMM fatal shutdown 通道的直接证据。
+官方文档明确指出：handler 不处理 fault 时 Firecracker 会等待，可能永久挂起；使用者需要监控 handler、设置 timeout，并在 handler 错误时终止 peer VM。[SRC-FC-002] 这说明外部 handler 的监控和停止责任必须由集成方明确，不能只凭 UFFD 注册成功推断失败闭环。

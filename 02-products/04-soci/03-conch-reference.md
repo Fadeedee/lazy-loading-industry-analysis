@@ -1,22 +1,29 @@
-# SOCI 对 Conch 方案的借鉴
+# SOCI：索引如何绑定不可变内容
 
-> 阅读完成后，读者能够把 SOCI 的 descriptor、派生元数据和 registry 工程经验用于 Conch/lazyd，而不引入无必要的 gzip 索引层。
+> 阅读后能说明对方解决了什么、哪些经验可用于三仓、选择还需要什么证据。以下借鉴均是建议，不是已冻结接口。
 
-## 直接采用
+## 对方具体做了什么
 
-- Conch 显式选择 rootfs descriptor，lazyd 不自行猜测复杂 image/index 中哪一层是 rootfs。
-- cache identity 基于 immutable digest，不基于 tag 或 layer index。
-- registry Bearer challenge/token、scope cache 和一次 401 refresh retry 作为公共能力。
-- metadata、range、cache hit、remote bytes 和 first-read latency 分开观测。
+zTOC 保存 TAR 文件位置及压缩流检查点状态，让 span 可以独立解压。SOCI 的 v1 外置索引与 v2 构建期转换有区别，不能笼统描述为完全不改镜像。
 
-## 需要适配
+第一方参考：[对应文档或源码](https://github.com/awslabs/soci-snapshotter/blob/238af848f32fcb887072c144b09ee65a3a895f9c/docs/glossary.md)。[SRC-SOCI-004] [SRC-SOCI-001] 核查日期与成熟度沿用[来源清单](../../appendix/source-inventory.md)，不是本次重新运行产品。
 
-- `fetch.unit_bytes` 的基准应使用 EROFS workload 数据，不照搬 SOCI span 默认值。
-- lazy-rootfs metadata 要记录 OCI descriptor 和 lazyd prepared identity，但无需再生成 zTOC。
-- GC 要处理 Conch snapshot 引用、lazyd cache lease 与 OCI content store 的边界。
+完整解释：[读取路径](01-data-path.md)、[缓存与快照生命周期](02-cache-snapshot-lifecycle.md)。
 
-## 不建议采用
+## 三仓怎样共同借鉴
 
-- 当前输入已经是原生 EROFS layer，不再增加 SOCI index/zTOC。
-- 不让 lazyd解析 Conch 专有 manifest 编排语义。
-- 不把 SOCI rootfs remote snapshot 等同于 writable disk 或 memory snapshot。
+| 项目 | 可考虑的改动 |
+| --- | --- |
+| Conch | 负责选择正确的镜像/派生索引，保护两者引用与授权，定义未准备完整时的状态。 |
+| StratoVirt | 通过 source 能力使用数据，不依赖 registry tag 或压缩流细节。 |
+| lazyd | 实现从逻辑范围到可解码内容的定位、缓存和去重，局部校验要有可信依据。 |
+
+## 选择与差异
+
+原生 EROFS 可能不需要 zTOC；兼容普通压缩 OCI 时则需要比较转换成本和在线索引成本。span 默认值不能直接当通用缓存单位。
+
+## 如何验证
+
+索引/内容不匹配、压缩 span 边界、随机读放大、凭据刷新和重复 prepare。
+
+回到[联合设计决策](../../04-conch-design-reference/08-design-decisions-and-evidence.md)，比较该经验与其他候选，而不是单独据此定方案。

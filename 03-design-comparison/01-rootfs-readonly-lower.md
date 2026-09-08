@@ -1,42 +1,26 @@
-# 只读 Rootfs Lower 路线比较
+# 镜像文件：文件服务、块设备还是 pmem？
 
-> 阅读完成后，读者能够根据 guest 兼容性、触发层级、镜像格式和共享目标，在文件级、块级、内核 cache 与 pmem/DAX 路线之间做选择。
+> 先比较业务需求与工程成本，再选择设备。以下方案不是互斥的产品标签，同一系统可以组合使用。
 
-## 比较矩阵
+| 路线 | 读取入口 | 主要优势 | 主要代价 | 参考 |
+| --- | --- | --- | --- | --- |
+| 文件服务/FUSE/virtiofs | 文件操作 | 路径语义清楚，易做按文件预取 | guest/host 接入和缓存层次需分析 | [Nydus](../02-products/01-nydus-v2/01-data-path.md)、[stargz](../02-products/03-stargz/01-data-path.md)、[SOCI](../02-products/04-soci/01-data-path.md) |
+| 按需块设备 | 块请求 | 与可写盘、块快照容易组合，guest 文件系统选择多 | 后端缺少文件语义；guest RAM 中仍可能复制缓存 | [OverlayBD](../02-products/05-overlaybd/01-data-path.md)、[E2B](../02-products/12-e2b-and-firecracker-stacks/01-data-path.md) |
+| pmem/DAX + 缺页供数 | VMM 地址访问 | 可映射只读文件页，减少部分重复复制 | VMM、内核、映射/唤醒及设备规模复杂度 | [Nydus UFFD](../02-products/01-nydus-v2/01-data-path.md) |
+| 本地完整文件 | 文件或设备读取 | 简单、运行期不依赖远端 | 下载可能阻塞启动 | 作为所有实验的基线 |
 
-| 路线 | 样本 | 触发 | 格式/索引 | guest page cache | VMM 修改 | 跨 VM file page 共享潜力 |
-| --- | --- | --- | --- | --- | --- | --- |
-| FUSE 文件级 | Nydus v2、stargz、SOCI | VFS/FUSE read | RAFS/eStargz/zTOC | 通常经过 | 否或很少 | 取决于 daemon cache，非直接 HVA file mapping |
-| 块级 | OverlayBD、NBD | sector/block I/O | block layers/index | 经过 guest FS cache | block device backend | 共享后端 cache，不天然共享 guest/HVA 页 |
-| EROFS+CacheFiles | Nydus fscache | kernel READ request | EROFS + cache object | 经过文件路径 | 否 | host kernel cache 可复用 |
-| EROFS file-backed | containerd native EROFS | 本地 file fault | 原生 EROFS | 取决于 mount/DAX | pmem 时需要 | 同 inode+offset 有潜力 |
-| EROFS+DAX+UFFD | Nydus UFFD、目标方案 | HVA missing fault | EROFS block view | 文件数据绕过 | 是 | FD+fixed mapping 可复用 file page |
+文件系统格式与设备不是一一绑定。EROFS 可以放在块设备上；pmem/DAX 也不是所有工作负载的默认最优解。
 
-来源：[SRC-NYDUS-001] [SRC-STARGZ-001] [SRC-SOCI-001] [SRC-OVERLAYBD-001] [SRC-EROFS-002] [SRC-EROFS-003] [SRC-NYDUS-004]
+## 怎么判断
 
-## 选择依据
+需要考虑：镜像准备/转换成本、guest 能力、多层设备数量、业务可用时间、首次请求、下载放大、跨 VM PSS、可写盘和 checkpoint 的组合成本。
 
-### 文件级适用
+对只读库共享需求强的场景，优先验证 pmem 文件映射；对整盘快照和读写恢复更重要的场景，块路径可能更简单。文件服务是有路径策略需求时的候选，不因当前某 API 不支持就排除。
 
-- 需要按路径/文件做细粒度策略；
-- 允许 FUSE/virtiofs 参与访问；
-- 希望兼容普通 OCI gzip 或 RAFS 生态；
-- 不要求 VMM 层直接共享 EROFS file page。
+## 必须避免的误解
 
-### 块级适用
+普通 sparse 文件的洞会读成零，不能直接把它当作自动远端读取设备。每条按需路线都要有明确的缺失数据触发和完成机制。
 
-- guest 需要 ext4 等普通读写文件系统；
-- 可写 upper、block snapshot 和 COW 是主要对象；
-- 希望 VMM 只暴露标准块设备；
-- 可以接受文件语义不可见。
+CacheFiles/EROFS on-demand 的内核版本与维护限制见[产品说明](../02-products/06-erofs-fscache/README.md)。不把历史内核接口当作无需验证的新部署依赖。
 
-### pmem/DAX 适用
-
-- lower 是严格只读 EROFS；
-- guest kernel 支持 pmem、DAX 与目标 transport；
-- 可以修改 VMM 处理 UFFD fault；
-- 目标包括减少 guest page-cache duplication 和跨 VM file-backed reuse。
-
-## 对当前方案的判断
-
-Conch 的 workload rootfs lower 已选择原生 EROFS，因此 `EROFS+DAX+UFFD+FD remap` 与对象匹配。后续 writable ext4 disk 不应强行塞进该 readonly path，应作为 virtio-blk/COW 路径。若 guest kernel 或 machine type 不支持 pmem/DAX，必须保留 full/local fallback，而不是退回已废弃的 fscache on-demand 作为唯一方案。[SRC-EROFS-004]
+具体取舍见[联合决策](../04-conch-design-reference/02-adopt-adapt-reject.md)。

@@ -19,8 +19,8 @@ mapped-ram 为 RAM blocks 提供可按 offset 定位的文件布局，避免恢�
 
 2026-09-08 复核的 [官方设计](https://github.com/qemu/qemu/blob/35500e5c41aec76cde59befe750600dac7a9e37a/docs/devel/migration/fast-snapshot-load.rst) 区分 fault thread 与 eager thread：前者按 fault 直接读本地快照；后者遍历其余页面。`RAMBlock->pending_bmap` 协调页面领取，避免二者重复装入并覆盖运行中的 RAM。这提供按需路径与后台路径的协作依据，不等于文档证明了任意 I/O 都可被高优先级请求抢占。
 
-eager thread **还承担最终完成恢复的职责**，不只是性能预取。若永不访问的冷页始终未装入，VM 可能长期停留在 migration 状态；因此不能原样类比为 lazyd 可随时取消的预测下载。QEMU 这条路径使用本地 snapshot 文件，远端镜像的 RTT 自适应窗口是我们的额外设计。
+eager thread **还承担最终完成恢复的职责**，不只是性能预取。若永不访问的冷页始终未装入，VM 可能长期停留在 migration 状态；因此它不能原样类比为可随时取消的预测下载。这条路径使用本地 snapshot 文件，不是远端 RTT 自适应下载实现。
 
-这与 lazyd 的 `inflight[digest, range]` 很相似，但一个追踪 memory pages，一个追踪 image content ranges。
+这里协调的是恢复中的 memory pages，不是不可变镜像缓存的 ready 状态。
 
 本次仅核对官方文档，没有运行 QEMU 恢复测试。Linux/UFFD、multifd 和 vhost-user 的适用限制仍以该版本文档为准。[SRC-QEMU-001]

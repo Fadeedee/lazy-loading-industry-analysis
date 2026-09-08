@@ -1,22 +1,29 @@
-# QEMU 对 Conch 方案的借鉴
+# QEMU：前台缺页和后台恢复怎样协调
 
-> 阅读完成后，读者能够将 QEMU 的 fault-priority、后台收敛和 page-state 思路用于后续 StratoVirt memory restore。
+> 阅读后能说明对方解决了什么、哪些经验可用于三仓、选择还需要什么证据。以下借鉴均是建议，不是已冻结接口。
 
-## 直接采用的原则
+## 对方具体做了什么
 
-- faulting vCPU 请求优先于后台 prefetch。
-- 同一 page/range 的 fault 与 background worker 去重。
-- 使用明确 pending/ready/failed 状态，不从 sparse extent 猜测正确性。
-- restore failure 进入 VMM 级失败路径。
+Fast Snapshot Load 按 mapped-ram 布局读取本地快照，fault thread 与 eager thread 使用页面状态协调领取。后台线程不只是预测，它还负责让恢复最终结束，避免未访问冷页令迁移状态长期悬挂。
 
-## 需要适配
+第一方参考：[对应文档或源码](https://github.com/qemu/qemu/blob/35500e5c41aec76cde59befe750600dac7a9e37a/docs/devel/migration/fast-snapshot-load.rst)。[SRC-QEMU-001] 核查日期与成熟度沿用[来源清单](../../appendix/source-inventory.md)，不是本次重新运行产品。
 
-- rootfs range 可以长期保持部分 materialized；guest RAM restore 是否后台全量收敛要单独配置。
-- lazyd bitmap 面向 immutable content，memory pending bitmap 应位于 StratoVirt snapshot subsystem。
-- Conch 可统一显示进度，但不合并两套 bitmap 文件格式。
+完整解释：[读取路径](01-data-path.md)、[缓存与快照生命周期](02-cache-snapshot-lifecycle.md)。
 
-## 不建议采用
+## 三仓怎样共同借鉴
 
-- 不为 rootfs FETCH 引入完整 QEMU migration protocol。
-- 不把 postcopy page server 当 OCI registry client。
-- 不让后台全量恢复挤占首次业务 rootfs fault 的 I/O 带宽，需做优先级和并发预算。
+| 项目 | 可考虑的改动 |
+| --- | --- |
+| Conch | 区分可运行与恢复完成，按场景设置后台物化策略及跨数据源预算。 |
+| StratoVirt | 确保重复填页不覆盖恢复后的写入，并让状态与停止路径一致。 |
+| lazyd | 可以复用内容去重和队列，但 RAM 页领取/安装代次不等于镜像缓存 ready。 |
+
+## 选择与差异
+
+本地快照调度可借鉴，不宣称它已实现远端网络自适应。是否全量后台物化由产品目标决定，不能统一套到长期按需镜像。
+
+## 如何验证
+
+冷页从不访问、并发需求/后台页、业务新写入、取消和恢复完成判定。
+
+回到[联合设计决策](../../04-conch-design-reference/08-design-decisions-and-evidence.md)，比较该经验与其他候选，而不是单独据此定方案。

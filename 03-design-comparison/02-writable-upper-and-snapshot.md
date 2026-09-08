@@ -1,46 +1,33 @@
-# 可写 Upper 与磁盘快照比较
+# 可写文件和磁盘快照：两种组合
 
-> 阅读完成后，读者能够理解只读 lazy lower 上方如何承载写入，并为增量 rootfs 快照选择文件级 overlay 或块级 COW。
+> “顶层可写”可以是文件目录，也可以是块设备写层。先确认对象，才能设计增量和懒恢复。
 
-## 方案比较
+## 组合 A：只读镜像 + 私有写层
 
-| 方案 | lower | write path | 增量对象 | 适合 guest ext4 | 主要样本 |
-| --- | --- | --- | --- | --- | --- |
-| OverlayFS upperdir | 文件系统 mount | host/guest upper files | upperdir/file tree | 取决于部署 | stargz/Nydus/containerd EROFS |
-| 块级 COW upper | read-only virtual disk | changed blocks | block diff/child layer | 是 | OverlayBD、E2B |
-| 复制完整磁盘 | full disk image | private disk | full image | 是 | 简单但放大明显 |
-| pmem backing write | pmem mapping | mapped file pages | 未自然形成 layer | 不适合作为当前 lower 写层 | Firecracker pmem warning |
+只读文件可来自 EROFS、文件服务或其他层。运行写入进入私有 upperdir 或块写层，再由 guest/运行时组装。
 
-来源：[SRC-OVERLAYBD-001] [SRC-E2B-001] [SRC-EROFS-003] [SRC-FC-003]
+收益是只读来源可独立共享；成本是设备、挂载、层顺序和 checkpoint 需要协调。
 
-## 为什么顶层常用 blk
+## 组合 B：整盘只读历史 + COW 写层
 
-ext4 是读写块文件系统，会更新 inode、journal、allocation bitmap 和 data blocks。virtio-blk/NBD/OverlayBD 后端天然观察并保存这些 block writes；只读 EROFS+DAX pmem 则设计为不可变 lower，不适合承载 journal 和共享写入。
+镜像文件与运行磁盘处于统一块视图。读取查最新写层及父层，新写入进入当前私有 head。可以通过标准块设备供 guest 文件系统使用。
 
-因此可以同时存在：
+[OverlayBD](../02-products/05-overlaybd/01-data-path.md)和 [E2B](../02-products/12-e2b-and-firecracker-stacks/01-data-path.md)提供实际样本。收益是磁盘谱系统一；代价是文件语义不可见，且块缓存命中不证明 guest RAM 页已共享。
 
-```text
-lower0..N: EROFS + DAX + virtio-pmem (shared, readonly)
-upper:     ext4 + virtio-blk + COW     (sandbox-private, writable)
-```
+两者都可进入三仓方案，不能因为计划使用 pmem 就提前排除整盘块路线。
 
-guest 通过 overlay 或运行时定义的组合获得最终 rootfs 视图。设备数量、layer merge 和 mount strategy 需要 Conch/guestd 统一管理。
+## 快照必须解决的问题
 
-## snapshot 一致性
+- 父层缺失、显式零、discard 和“继承父层”分别如何表达？
+- 封存旧写层时，新写入去哪里，读取是否仍能访问旧层？
+- 内存、设备状态与磁盘是否来自同一个时间点？
+- 新 checkpoint 发布失败时，原快照和当前写入是否仍安全？
+- 恢复到另一节点时，如何重建引用、私有写层和设备身份？
 
-创建 checkpoint 时不能只复制 upper blocks：
+ext4 常用于块设备写层，但并非任何环境都只能使用 virtio-blk。这里选 blk 的理由应是可观察写入和快照接入，而不是文件系统名称。
 
-1. pause/quiesce workload 或建立一致性屏障；
-2. flush guest filesystem/block backend；
-3. 固化 writable head 为 snapshot child；
-4. 保存与其同一时间点的 VM/device state 和 memory snapshot；
-5. 记录 parent lineage 和内容校验；
-6. 创建新的 writable head 后再 resume。
+## 验证
 
-Firecracker 明确把 disk consistency 留给使用者，说明 Conch 必须承担这层协调。[SRC-FC-001]
+相同工作负载对照完整复制、混合布局与块 COW：测文件正确性、父层查询、保存/恢复耗时、私有写入隔离和业务延迟。不能只比一次 read 系统调用。
 
-## 推荐
-
-- 第一阶段：rootfs lower 只读懒加载，不改现有 writable 行为。
-- 第二阶段：把 ext4 upper 建模为独立 block resource，支持 full/diff snapshot。
-- 第三阶段：与 memory snapshot 形成统一 checkpoint transaction。
+完整流程见[Checkpoint 设计](../04-conch-design-reference/06-checkpoint-three-path-restore.md)。

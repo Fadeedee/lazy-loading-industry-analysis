@@ -21,4 +21,4 @@ README 描述 metrics、trace 和 Unix-socket apiserver，但未形成稳定的�
 
 ## 性能证据使用边界
 
-分支给出了 openclaw 镜像的实验数据，但数据来自该分支自身、特定镜像和环境。可用于形成假设，不能替代 Conch 在目标 registry、kernel、StratoVirt 和并发 VM 下的本地基准。
+分支给出了 openclaw 镜像的实验数据，但数据来自该分支自身、特定镜像和环境。可用于形成假设，不能替代目标环境中对 registry、kernel、VMM 和并发 VM 的实测。

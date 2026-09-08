@@ -1,6 +1,6 @@
 # 懒加载的对象与边界
 
-> 阅读完成后，读者能够判断一次“懒加载”究竟延后了下载、落盘、映射还是内存恢复，并能把 rootfs lower、可写 upper 和 guest RAM 分成三条独立数据路径。
+> 阅读完成后，读者能够判断一次“懒加载”究竟延后了下载、落盘、映射还是内存恢复，并能区分 rootfs lower、可写磁盘和 guest RAM 的不同数据语义。
 
 ## 1. 懒加载不是一种固定技术
 
@@ -58,7 +58,7 @@ OverlayBD 同时建模只读 lower 与可写 upper；E2B 使用只读模板 root
 
 ### 2.3 guest RAM
 
-它是某一运行时刻的 CPU/设备状态所依赖的内存内容。RAM 页身份通常来自快照文件中的 range/page，而不是 OCI layer digest。恢复正确性还依赖 vCPU 状态、设备状态和快照兼容性。
+它是某一运行时刻的 CPU/设备状态所依赖的内存内容。RAM 页需要由内存视图和逻辑页位置定位；底层快照对象也可以按内容 digest 寻址，但单个对象 digest 不能替代整份内存视图。恢复正确性还依赖 vCPU 状态、设备状态和快照兼容性。
 
 典型链路：
 
@@ -81,7 +81,7 @@ checkpoint/template 恢复可能同时需要：
 | 可写 upper/disk diff | 同一快照 lineage | block I/O | COW block cache/remote block |
 | guest RAM | 同一 memory snapshot | UFFD/page fault | copy page 或映射 snapshot file |
 
-它们可以由 Conch 在一个恢复事务中统一编排，但不应因此强制共用一个数据协议。E2B 的公开架构正是把 Firecracker UFFD memory、NBD COW rootfs 和各自的 diff 快照作为相互配合但不同的数据路径。[SRC-E2B-001]
+它们可以统一编排，并共用内容供应与带类型的协议，但不能丢掉各自的写入、继承和完成语义。E2B 将 Firecracker UFFD memory 与 NBD COW rootfs 配合使用，并分别导出 diff；其 rootfs 在磁盘路径中，不是另加一条 pmem 路径。[SRC-E2B-001]
 
 ## 4. 四个容易混淆的“尚未就绪”
 
@@ -90,7 +90,7 @@ checkpoint/template 恢复可能同时需要：
 3. **文件页未驻留**：文件字节已经在本地，host page cache 尚无该页；内核可以从存储 fault-in。
 4. **anonymous HVA 缺页**：VMM 已预留虚拟地址，但尚无匿名物理页或 file-backed VMA 覆盖；UFFD 可以接管此 missing fault。
 
-Conch 的目标 rootfs 路径同时涉及前两项与第四项：lazyd 负责把远端范围变成可信 cache 数据；StratoVirt 负责把已就绪 file range 映射到 faulting HVA。
+例如，pmem/UFFD 候选会把“远端未下载”与“映射尚未填充”连接起来；块设备候选则在块请求中解决远端缺失。不能因为两者都需要内容缓存，就假定它们有相同的 fault handler。
 
 ## 5. 判断一个方案是否真的“懒”
 
@@ -105,12 +105,8 @@ Conch 的目标 rootfs 路径同时涉及前两项与第四项：lazyd 负责把
 
 “先启动、后台立即全量下载”仍然减少了关键路径，但它和真正的长期按需物化不是同一种资源行为。
 
-## 6. 对当前项目的直接结论
+## 6. 用这些概念读我们的设计
 
-- Conch 负责判断本次启动需要哪些 rootfs、磁盘快照和内存快照，并协调依赖和失败。
-- lazyd 的第一职责是内容供应与共享缓存，不应把 VM identity 混入不可变 layer 的 cache identity。
-- StratoVirt 只处理 guest 地址空间和 fault resolution，不应理解 OCI manifest 或快照业务策略。
-- guest/guestd 负责稳定识别设备并组装 `EROFS+DAX` lower 与可写 upper。
-- 后续统一的是资源模型、状态与生命周期，不是强行统一 FUSE、块 I/O 和 UFFD 数据面。
+先判断一次用户操作需要哪些对象，再比较设备、内容供应和恢复方式。三类语义不等于三个固定进程，也不预先指定各仓库只能修改哪一层。
 
-相关术语见[术语表](../appendix/glossary.md)，各能力成熟度见[产品成熟度矩阵](../appendix/maturity-matrix.md)。
+下一步看[三仓联合设计](../04-conch-design-reference/08-design-decisions-and-evidence.md)；需要解释术语时看[术语表](../appendix/glossary.md)。

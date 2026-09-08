@@ -33,11 +33,15 @@ SCM_RIGHTS cache fd + dev_off
 | `MAP_PRIVATE` | file-backed | 写时 COW | 干净 file page 可共享，修改页私有 |
 | `MAP_SHARED` | file-backed | 可传播到 backing file，受 fd/protection 约束 | 同 inode+offset file page 共享更直接 |
 
-Nydus 已合入 zerocopy 代码当前使用 `MAP_PRIVATE | MAP_FIXED`。[SRC-NYDUS-004] Conch 目标是只读 EROFS lower，因此最终选择不能只看共享潜力，还要确保 guest 无法通过 pmem 写坏共享 cache：`PROT_READ`、virtio-pmem readonly 和 KVM readonly memslot 应形成防御链。
+Nydus 核查版本的 zerocopy 使用 `MAP_PRIVATE | MAP_FIXED`。[SRC-NYDUS-004] 对只读文件映射候选，必须验证 host VMA 权限和 KVM 写入处理；打开只读 FD 或声明 guest 文件系统只读，并不自动证明 KVM memslot 已受写保护。对 RAM 则还需允许私有写入及正确追踪脏页。
 
 ## 一次 fault 映射多少
 
-lazyd 若返回一个已下载、校验、page-aligned 的完整 ready range，StratoVirt 应映射该 range，而不是只映射当前 4 KiB page。wake 覆盖已 remap range；未 remap 相邻页继续由 UFFD 触发。
+完整 ready range 映射可减少后续 fault；映射预算、VMA 数和预取放大也需要衡量。每次映射都必须覆盖当前等待页并校验边界，wake/resolve 与实际完成的区间一致；未处理相邻页仍可触发 UFFD。不要把固定 4 KiB 页或服务返回的 fetch unit 当作所有对象的唯一粒度。
+
+## handler 放在外部时的额外条件
+
+外部进程可以持有 UFFD 并执行 COPY，但不能通过自己的 mmap 替换 VMM 的 HVA。文件映射路径需要把映射计划/FD 交给 VMM 执行并确认完成，再解决等待。现有 UFFD FD 传递能力不等于现成的跨进程 remap 协议。
 
 ## 推荐验证
 

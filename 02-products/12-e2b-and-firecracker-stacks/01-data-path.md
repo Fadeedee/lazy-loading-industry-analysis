@@ -34,7 +34,7 @@ guest ext4 read/write
 - [`Overlay.ReadAt/WriteAt`](https://github.com/e2b-dev/infra/blob/cc7c574233ad98665a7c72a3d37b0af89ae79a71/packages/orchestrator/pkg/sandbox/block/overlay.go) 实现上述读取优先级及私有写入。`SwapCache` 把旧 cache 放入冻结的 sealing 槽位，让新写进入新 cache；`FoldSealing` 只将新 cache 缺少的块补入，失败时保持旧层可读。不能在封存任务刚开始时就释放旧块。[SRC-E2B-002]
 - [`Userfaultfd.faultPage`](https://github.com/e2b-dev/infra/blob/cc7c574233ad98665a7c72a3d37b0af89ae79a71/packages/orchestrator/pkg/sandbox/uffd/userfaultfd/userfaultfd.go) 从独立 `PageReader` 读取，检查短读，有限退避重试后执行 copy；最终取数失败调用非空 `onFailure` 并返回错误。RAM 还有 WP/REMOVE 状态，不能照搬为只读 rootfs range bitmap。[SRC-E2B-003]
 
-对 Conch/lazyd 的直接参考是 **后端可访问就绪、明确的读取覆盖顺序、私有 head 切换和有限失败策略**；不表示必须采用 E2B 的 NBD 或完全相同的缓存格式。`onFailure` 在调用点是否触发 VM 停止，也需独立追踪，不能仅凭该函数认定生命周期闭环。
+这些代码明确展示了后端 ready、读取覆盖顺序和私有 head 切换。面向三仓的候选比较见[借鉴分析](03-conch-reference.md)。`onFailure` 在调用点是否触发 VM 停止，也需独立追踪，不能仅凭该函数认定生命周期闭环。
 
 ## 关键性能思想
 

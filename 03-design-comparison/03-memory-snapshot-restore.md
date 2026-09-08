@@ -1,46 +1,30 @@
-# Guest RAM 懒恢复比较
+# 内存快照：延迟读盘，还是延迟远端下载？
 
-> 阅读完成后，读者能够比较内核 file fault、external UFFD、internal UFFD 和 postcopy/page server，并为 StratoVirt 选择独立的 memory restore 路径。
+> 本地文件的懒恢复不自动解决远端快照分发。两段等待要分别测量。
 
-## 比较矩阵
+| 方式 | 从哪里取页 | 优势 | 必须验证 |
+| --- | --- | --- | --- |
+| 本地文件私有映射 | 已完整本地文件 | 内核 fault-in，干净页可共享，写时 COW | 源生存期、脏页和快照兼容 |
+| 外部 UFFD handler | 本地/远端 page source | 后端可扩展，VMM 可减少取数逻辑 | 就绪、权限、失败域、事件代次 |
+| VMM 内部 handler | snapshot reader | 地址和运行状态集中 | I/O 阻塞隔离、生命周期、模块耦合 |
+| 按需 + 后台物化 | 剩余快照页 | 缩短后续缺页并可结束恢复阶段 | 不覆盖业务新写入、不重复领取页面、不挤占前台 |
 
-| 路线 | 样本 | page source | fault handler | 后台收敛 | 共享潜力 |
-| --- | --- | --- | --- | --- | --- |
-| file `MAP_PRIVATE` | Firecracker | local memory file | host kernel | 内核按访问 | 干净 file page 可共享，写时 COW |
-| external UFFD copy | Firecracker、CRIU | memory file/page server | 独立 daemon | 可选 | 每 VM/process anonymous page |
-| internal UFFD restore | Cloud Hypervisor v53 | snapshot ranges | VMM/restore daemon | 可选 | 依实现而定 |
-| postcopy infrastructure | QEMU | mapped-ram/migration source | migration subsystem | 是 | 主要目标是恢复，不是共享 cache |
+参考：[Firecracker](../02-products/07-firecracker/01-data-path.md)、[CH](../02-products/08-cloud-hypervisor/01-data-path.md)、[QEMU](../02-products/09-qemu/01-data-path.md)、[CRIU](../02-products/10-criu/01-data-path.md)。
 
-来源：[SRC-FC-001] [SRC-FC-002] [SRC-CH-001] [SRC-QEMU-001] [SRC-CRIU-001]
+## 增量必须先有正确视图
 
-## 选择问题
+逻辑页可能位于 base 或某个 delta，也可能被显式清零。先建立稳定的页来源索引，再接受访问；索引可做缓存，但不能每次 fault 临时猜测父层。
 
-### 本地 template memory file
+恢复后业务写入、WP/REMOVE 事件和后台填页要协调。内容已缓存不等于 VM 页已安装；一次缓存命中不能跳过运行态页状态检查。
 
-优先考虑 `MAP_PRIVATE`：实现简单、内核 fault-in、干净页可复用。但 source 必须在 VM 生命周期内保持可访问，远端缺失页不能直接由普通 file mapping 表达。
+## 哪些可以与镜像共用
 
-### 远端或分层 memory source
+下载、授权、内容校验、不可变缓存、传输框架和全局预算都可以共用。统一服务或类型化协议是合理候选。
 
-需要 UFFD/postcopy：handler 可以按 fault page 拉取，也可后台加载。代价是故障处理、timeout、page state、source lease 和安全面更复杂。
+必须区分逻辑身份、页/块布局、运行写权限、驻留/脏页、代次和回收引用。区分这些语义，不等于强制两套进程或不能共用协议。
 
-### 增量快照
+当前 StratoVirt 的外部 UFFD 能力及待合入增量接口见[上游基线](../04-conch-design-reference/01-current-system-boundary.md)。先复用已提供的恢复机制，再判断远端读取缺口。
 
-必须明确 base + diff 的页覆盖顺序。恢复器应先建立 page lookup view，再允许 vCPU fault，避免 fault path 临时遍历不稳定的远端 lineage。
+## 验证必要性
 
-## 与 rootfs UFFD 的共用边界
-
-可以共用：
-
-- userfaultfd 创建、API negotiation、register/unregister；
-- event poll、地址范围检查、zeropage/copy/wake wrapper；
-- handler thread lifecycle 与 fatal reporting。
-
-不应共用：
-
-- content identity；
-- FETCH schema 和 range semantics；
-- bitmap/on-disk state；
-- source lifecycle 和 GC；
-- prefault/prefetch policy。
-
-Cloud Hypervisor #8239 的未合入结果直接支持这种谨慎分层。[SRC-CH-002]
+分别测快照元数据准备、完整 payload 下载、本地恢复、运行期首 fault、首次业务请求。比较冷节点与热节点。若网络不在关键路径，先改远端懒下载未必是最有效投入。
