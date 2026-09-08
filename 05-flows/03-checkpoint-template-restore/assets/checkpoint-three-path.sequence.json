@@ -2,66 +2,161 @@
   "schema_version": 1,
   "diagram_type": "sequence",
   "meta": {
-    "title": "Checkpoint Template 三路懒恢复时序",
+    "title": "Checkpoint 恢复：统一结果，区分数据语义（建议）",
     "locale": "zh-CN",
-    "viewBox": [1080, 1220],
+    "viewBox": [
+      1080,
+      680
+    ],
     "column_fit": "spread",
-    "quality_profile": "showcase",
-    "views": [
-      { "id": "prepare_all", "label": "并行准备", "focus": ["user", "conch", "lazyd", "block", "memory", "stratovirt"], "note": "Rootfs、可写磁盘和 Guest RAM 分别达到 Faultable。" },
-      { "id": "resume", "label": "统一恢复屏障", "focus": ["conch", "stratovirt", "kvm", "guest"], "note": "所有后端 ready 后才恢复 vCPU。" },
-      { "id": "three_faults", "label": "三类访问", "focus": ["guest", "kvm", "stratovirt", "lazyd", "block", "memory"], "note": "三类 fault/request 各走自己的 source 和完成动作。" }
-    ]
+    "quality_profile": "showcase"
   },
   "participants": [
-    { "id": "user", "type": "external", "label": "用户 / SDK", "sublabel": "Restore Sandbox" },
-    { "id": "conch", "type": "backend", "label": "Conch", "sublabel": "Restore Coordinator" },
-    { "id": "lazyd", "type": "backend", "label": "lazyd", "sublabel": "Rootfs source" },
-    { "id": "block", "type": "database", "label": "Block Backend", "sublabel": "parent + COW head" },
-    { "id": "memory", "type": "backend", "label": "Memory Source", "sublabel": "file / conch-cow" },
-    { "id": "stratovirt", "type": "backend", "label": "StratoVirt", "sublabel": "VMM" },
-    { "id": "kvm", "type": "security", "label": "KVM", "sublabel": "memslots + vCPU" },
-    { "id": "guest", "type": "frontend", "label": "Guest", "sublabel": "RAM + pmem + blk" }
-  ],
-  "segments": [
-    { "from": 150, "to": 440, "label": "解析与并行准备" },
-    { "from": 460, "to": 680, "label": "构造 VMM 与恢复屏障" },
-    { "from": 700, "to": 1080, "label": "运行期三条数据路径" }
+    {
+      "id": "caller",
+      "type": "external",
+      "label": "用户 / SDK",
+      "sublabel": "操作发起者"
+    },
+    {
+      "id": "controller",
+      "type": "backend",
+      "label": "Conch",
+      "sublabel": "统一状态与引用"
+    },
+    {
+      "id": "supplier",
+      "type": "backend",
+      "label": "供数角色",
+      "sublabel": "lazyd / 类型适配"
+    },
+    {
+      "id": "vmm",
+      "type": "backend",
+      "label": "StratoVirt",
+      "sublabel": "设备、内存与执行"
+    },
+    {
+      "id": "guest",
+      "type": "frontend",
+      "label": "Guest / guestd",
+      "sublabel": "挂载与业务"
+    }
   ],
   "messages": [
-    { "id": "restore", "from": "user", "to": "conch", "y": 185, "label": "RestoreSandbox(template)", "variant": "emphasis" },
-    { "id": "rootfs_prepare", "from": "conch", "to": "lazyd", "y": 235, "label": "准备 EROFS instances" },
-    { "id": "disk_prepare", "from": "conch", "to": "block", "y": 280, "label": "打开 parent chain；创建 COW head" },
-    { "id": "memory_attach", "from": "conch", "to": "memory", "y": 325, "label": "准备 full file 或 Attach incremental" },
-    { "id": "rootfs_ready", "from": "lazyd", "to": "conch", "y": 360, "label": "Rootfs Faultable", "variant": "return" },
-    { "id": "disk_ready", "from": "block", "to": "conch", "y": 395, "label": "Disk Faultable + writable", "variant": "return" },
-    { "id": "memory_ready", "from": "memory", "to": "conch", "y": 430, "label": "Memory source + memfd ready", "variant": "return" },
-    { "id": "start_vmm", "from": "conch", "to": "stratovirt", "y": 500, "label": "启动 VMM；传三类 typed sources", "variant": "emphasis" },
-    { "id": "memory_handoff", "from": "stratovirt", "to": "memory", "y": 545, "label": "memory UFFD + mappings", "variant": "security" },
-    { "id": "register_regions", "from": "stratovirt", "to": "kvm", "y": 590, "label": "RAM / pmem memslots + UFFD" },
-    { "id": "all_ready", "from": "stratovirt", "to": "conch", "y": 635, "label": "所有 handler ready；VM paused", "variant": "return" },
-    { "id": "resume_vcpu", "from": "conch", "to": "kvm", "y": 675, "label": "Resume vCPU", "variant": "emphasis" },
-    { "id": "ram_fault", "from": "guest", "to": "kvm", "y": 735, "label": "访问缺失 Guest RAM 页" },
-    { "id": "ram_event", "from": "kvm", "to": "memory", "y": 775, "label": "memory UFFD fault", "variant": "security" },
-    { "id": "ram_wake", "from": "memory", "to": "kvm", "y": 815, "label": "pwrite memfd + WAKE", "variant": "return" },
-    { "id": "rootfs_fault", "from": "guest", "to": "stratovirt", "y": 865, "label": "EROFS+DAX pmem fault", "variant": "emphasis" },
-    { "id": "rootfs_fetch", "from": "stratovirt", "to": "lazyd", "y": 905, "label": "FETCH rootfs range" },
-    { "id": "rootfs_fd", "from": "lazyd", "to": "stratovirt", "y": 945, "label": "cache FD + ready range", "variant": "security" },
-    { "id": "pmem_wake", "from": "stratovirt", "to": "kvm", "y": 985, "label": "MAP_FIXED + WAKE", "variant": "return" },
-    { "id": "disk_io", "from": "guest", "to": "block", "y": 1030, "label": "ext4 block read/write", "variant": "emphasis" },
-    { "id": "disk_complete", "from": "block", "to": "guest", "y": 1070, "label": "read parent / write COW；complete", "variant": "return" }
-  ],
-  "activations": [
-    { "participant": "conch", "from": 180, "to": 445, "type": "backend" },
-    { "participant": "stratovirt", "from": 495, "to": 640, "type": "backend" },
-    { "participant": "memory", "from": 770, "to": 820, "type": "backend" },
-    { "participant": "stratovirt", "from": 860, "to": 990, "type": "backend" },
-    { "participant": "lazyd", "from": 900, "to": 950, "type": "backend" },
-    { "participant": "block", "from": 1025, "to": 1075, "type": "database" }
+    {
+      "id": "step1",
+      "from": "caller",
+      "to": "controller",
+      "label": "恢复指定 checkpoint",
+      "variant": "emphasis",
+      "y": 160
+    },
+    {
+      "id": "step2",
+      "from": "controller",
+      "to": "supplier",
+      "label": "准备一致视图和私有写层",
+      "variant": "default",
+      "y": 196
+    },
+    {
+      "id": "step3",
+      "from": "supplier",
+      "to": "controller",
+      "label": "索引、授权与来源可用",
+      "variant": "return",
+      "y": 232
+    },
+    {
+      "id": "step4",
+      "from": "controller",
+      "to": "vmm",
+      "label": "接入磁盘、RAM 和设备状态",
+      "variant": "emphasis",
+      "y": 268
+    },
+    {
+      "id": "step5",
+      "from": "vmm",
+      "to": "supplier",
+      "label": "建立 attachment 与处理路径",
+      "variant": "security",
+      "y": 304
+    },
+    {
+      "id": "step6",
+      "from": "supplier",
+      "to": "vmm",
+      "label": "来源可处理访问",
+      "variant": "return",
+      "y": 340
+    },
+    {
+      "id": "step7",
+      "from": "vmm",
+      "to": "controller",
+      "label": "恢复状态，报告就绪",
+      "variant": "return",
+      "y": 376
+    },
+    {
+      "id": "step8",
+      "from": "controller",
+      "to": "vmm",
+      "label": "放行执行",
+      "variant": "emphasis",
+      "y": 412
+    },
+    {
+      "id": "step9",
+      "from": "guest",
+      "to": "vmm",
+      "label": "文件、块或 RAM 访问",
+      "variant": "default",
+      "y": 448
+    },
+    {
+      "id": "step10",
+      "from": "supplier",
+      "to": "vmm",
+      "label": "按对象语义供数或完成 I/O",
+      "variant": "security",
+      "y": 484
+    },
+    {
+      "id": "step11",
+      "from": "vmm",
+      "to": "guest",
+      "label": "继续执行，写入保持私有",
+      "variant": "return",
+      "y": 520
+    },
+    {
+      "id": "step12",
+      "from": "controller",
+      "to": "caller",
+      "label": "报告恢复结果",
+      "variant": "return",
+      "y": 556
+    }
   ],
   "cards": [
-    { "dot": "cyan", "title": "统一的是状态", "items": ["Conch 解析同一 Boot Index 资源图", "每路报告 MetadataReady / Faultable / Failed", "任一路失败都取消并回滚整个 restore"] },
-    { "dot": "violet", "title": "分开的是数据面", "items": ["Rootfs 使用 lazyd FD remap", "Disk 使用 block parent + COW", "Guest RAM 使用 memory snapshot page source"] },
-    { "dot": "rose", "title": "恢复屏障", "items": ["VMM 先保持 paused", "UFFD 与 block handler 全部 ready", "最后由 Conch 恢复 vCPU"] }
+    {
+      "dot": "cyan",
+      "title": "图的层次",
+      "items": [
+        "表示角色协作，不规定 handler 进程位置",
+        "请求、FD 和 UFFD 的准确方向由选定方案细化"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "失败与就绪",
+      "items": [
+        "状态恢复也可能访问内存，来源须提前可用",
+        "失败报告 Conch，取消并释放本次 attachment"
+      ]
+    }
   ]
 }

@@ -35,7 +35,7 @@ Conch、StratoVirt 的开发基线是**开发开始时最新 upstream/dev 的明
 - [缓存生命周期](04-conch-design-reference/assets/content-cache-lifecycle.html)：什么时候可读、什么时候可回收。
 - [业界机制全景](assets/overview/industry-panorama.html)与[触发路径](03-design-comparison/assets/mechanism-paths.html)：产品机制参考，不是本项目选型结论。
 
-HTML 可以直接在浏览器打开，不需要运行产品服务。
+HTML 可以直接在浏览器打开，不需要运行产品服务。图形检查范围与截图见[验证记录](appendix/validation-2026-09-08.md)。
 
 ## 阅读时保留两个区别
 

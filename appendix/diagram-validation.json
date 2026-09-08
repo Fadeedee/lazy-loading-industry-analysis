@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-08",
+  "tool": "Archify 2.17",
+  "scope": "documentation diagrams only",
+  "diagrams": [
+    {
+      "diagram_type": "architecture",
+      "specification": "04-conch-design-reference/assets/target-responsibilities.architecture.json",
+      "output": "04-conch-design-reference/assets/target-responsibilities.html",
+      "specification_sha256": "d3c047c78725607f625e8517ab6ffa8e48fc449f3204aa46f57b11c3bf031a50",
+      "artifact_sha256": "b50548ac3463c24b73ccff484001f2c45d32356bbbed13bf57eb3988f6e0c9ee",
+      "validation": {
+        "checksPassed": 9,
+        "checkCount": 9,
+        "compositionProfile": "showcase",
+        "compositionStatus": "pass",
+        "errors": 0,
+        "warnings": 0
+      },
+      "browser_evidence": "passed",
+      "visual_review": "passed",
+      "visual_review_scope": [
+        "1440x900 light",
+        "2048x1320 dark"
+      ],
+      "correction_rounds": 1
+    },
+    {
+      "diagram_type": "sequence",
+      "specification": "05-flows/01-cold-rootfs-lazy-start/assets/cold-rootfs.sequence.json",
+      "output": "05-flows/01-cold-rootfs-lazy-start/assets/cold-rootfs.html",
+      "specification_sha256": "08cc5eb1e54de4d5c00c43b3d5f78e14941b06c7f956ef7488a1f93163fefdfb",
+      "artifact_sha256": "c51c05c17e556c6f82c3a3bdf30fcc2ca9756da1171f0124163b9e9fec89bac7",
+      "validation": {
+        "checksPassed": 9,
+        "checkCount": 9,
+        "compositionProfile": "showcase",
+        "compositionStatus": "pass",
+        "errors": 0,
+        "warnings": 0
+      },
+      "browser_evidence": "passed",
+      "visual_review": "passed",
+      "visual_review_scope": [
+        "1440x900 light",
+        "2048x1320 dark"
+      ],
+      "correction_rounds": 1
+    },
+    {
+      "diagram_type": "sequence",
+      "specification": "05-flows/03-checkpoint-template-restore/assets/checkpoint-three-path.sequence.json",
+      "output": "05-flows/03-checkpoint-template-restore/assets/checkpoint-three-path.html",
+      "specification_sha256": "afa43959987c31c4b95466849ef7af089ebacfdbe8c0097b6d096b4c760e45a8",
+      "artifact_sha256": "516770f3cf7d186ecc146a9841bd7fb8529cc1c306977953ed9bf84e4cb4f777",
+      "validation": {
+        "checksPassed": 9,
+        "checkCount": 9,
+        "compositionProfile": "showcase",
+        "compositionStatus": "pass",
+        "errors": 0,
+        "warnings": 0
+      },
+      "browser_evidence": "passed",
+      "visual_review": "passed",
+      "visual_review_scope": [
+        "1440x900 light",
+        "2048x1320 dark"
+      ],
+      "correction_rounds": 1
+    },
+    {
+      "diagram_type": "lifecycle",
+      "specification": "04-conch-design-reference/assets/content-cache.lifecycle.json",
+      "output": "04-conch-design-reference/assets/content-cache-lifecycle.html",
+      "specification_sha256": "77fbab07be6669a95c102c1d5caadc56df6b0541b973d3a3b517d96aeb0264b1",
+      "artifact_sha256": "e43eb3e83f8aee6ea92c505020498b98983d2ee0ef6edb4006b9d41cce376716",
+      "validation": {
+        "checksPassed": 9,
+        "checkCount": 9,
+        "compositionProfile": "showcase",
+        "compositionStatus": "pass",
+        "errors": 0,
+        "warnings": 0
+      },
+      "browser_evidence": "passed",
+      "visual_review": "passed",
+      "visual_review_scope": [
+        "1440x900 light",
+        "2048x1320 dark"
+      ],
+      "correction_rounds": 2
+    },
+    {
+      "diagram_type": "architecture",
+      "specification": "assets/overview/industry-panorama.architecture.json",
+      "output": "assets/overview/industry-panorama.html",
+      "specification_sha256": "229762724daac45e1c32e2c180ec9c499af4890175c7d1ef1aa31f2367603e52",
+      "artifact_sha256": "abfca7b75478fa5f2f2d8a08c0f35b42e3b6bdc0e75c3126e140a5b20afe79c1",
+      "validation": {
+        "checksPassed": 9,
+        "checkCount": 9,
+        "compositionProfile": "showcase",
+        "compositionStatus": "pass",
+        "errors": 0,
+        "warnings": 0
+      },
+      "browser_evidence": "passed",
+      "visual_review": "passed",
+      "visual_review_scope": [
+        "1440x900 light",
+        "2048x1320 dark"
+      ],
+      "correction_rounds": 1
+    },
+    {
+      "diagram_type": "architecture",
+      "specification": "03-design-comparison/assets/mechanism-paths.architecture.json",
+      "output": "03-design-comparison/assets/mechanism-paths.html",
+      "specification_sha256": "021b138daf5d7ccb709c761b9a0a06187e1f9873e61cf3f6242035c82e6e47fb",
+      "artifact_sha256": "59f9dc5b290783caa5157c303f6046f0d4adce4ebee52520b6a32ed1fd1f915e",
+      "validation": {
+        "checksPassed": 9,
+        "checkCount": 9,
+        "compositionProfile": "showcase",
+        "compositionStatus": "pass",
+        "errors": 0,
+        "warnings": 0
+      },
+      "browser_evidence": "passed",
+      "visual_review": "passed",
+      "visual_review_scope": [
+        "1440x900 light",
+        "2048x1320 dark"
+      ],
+      "correction_rounds": 2
+    }
+  ]
+}

@@ -2,51 +2,346 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "业界懒加载机制全景",
+    "title": "业界懒加载机制示例",
     "locale": "zh-CN",
-    "viewBox": [1320, 820],
+    "viewBox": [
+      1320,
+      760
+    ],
     "quality_profile": "showcase",
     "views": [
-      { "id": "rootfs", "label": "只读 Rootfs", "focus": ["rootfs", "file_trigger", "dax_trigger", "image_service", "file_mapping"], "note": "比较文件请求与 DAX 缺页两条只读镜像路径。" },
-      { "id": "writable", "label": "可写磁盘", "focus": ["writable", "block_trigger", "block_service", "file_mapping"], "note": "可写 upper 使用块请求、COW 和磁盘快照。" },
-      { "id": "memory", "label": "Guest RAM", "focus": ["guest_ram", "memory_trigger", "page_source", "page_install"], "note": "内存恢复使用独立快照身份和页面来源。" }
+      {
+        "id": "rootfs",
+        "label": "只读 Rootfs",
+        "focus": [
+          "rootfs",
+          "file_trigger",
+          "dax_trigger",
+          "image_service",
+          "file_mapping"
+        ],
+        "note": "比较文件请求与 DAX 缺页两条只读镜像路径。"
+      },
+      {
+        "id": "writable",
+        "label": "可写磁盘",
+        "focus": [
+          "writable",
+          "block_trigger",
+          "block_service",
+          "file_mapping"
+        ],
+        "note": "磁盘视图可包含 rootfs，使用块请求、COW 和快照。"
+      },
+      {
+        "id": "memory",
+        "label": "Guest RAM",
+        "focus": [
+          "guest_ram",
+          "memory_trigger",
+          "page_source",
+          "page_install"
+        ],
+        "note": "内存恢复使用独立快照身份和页面来源。"
+      }
     ]
   },
   "components": [
-    { "id": "rootfs", "type": "external", "label": "只读 Rootfs Lower", "sublabel": "OCI / EROFS / RAFS", "pos": [40, 120], "size": [170, 68] },
-    { "id": "writable", "type": "external", "label": "可写 Disk Upper", "sublabel": "ext4 / COW diff", "pos": [40, 360], "size": [170, 68] },
-    { "id": "guest_ram", "type": "external", "label": "Guest RAM", "sublabel": "full / incremental", "pos": [40, 600], "size": [170, 68] },
-    { "id": "file_trigger", "type": "frontend", "label": "VFS / FUSE", "sublabel": "文件 read", "pos": [300, 70], "size": [150, 62] },
-    { "id": "dax_trigger", "type": "frontend", "label": "DAX + UFFD", "sublabel": "HVA missing fault", "pos": [300, 210], "size": [150, 62] },
-    { "id": "block_trigger", "type": "frontend", "label": "Block I/O", "sublabel": "sector request", "pos": [300, 380], "size": [150, 62] },
-    { "id": "memory_trigger", "type": "frontend", "label": "UFFD / Postcopy", "sublabel": "RAM page fault", "pos": [300, 600], "size": [150, 62] },
-    { "id": "image_service", "type": "backend", "label": "镜像内容服务", "sublabel": "range + verify + cache", "pos": [590, 145], "size": [170, 68] },
-    { "id": "block_service", "type": "backend", "label": "块设备后端", "sublabel": "lower + private COW", "pos": [590, 380], "size": [170, 68] },
-    { "id": "page_source", "type": "backend", "label": "内存页来源", "sublabel": "snapshot / page server", "pos": [590, 600], "size": [170, 68] },
-    { "id": "file_mapping", "type": "database", "label": "本地内容视图", "sublabel": "cache / file page / block", "pos": [910, 250], "size": [185, 72] },
-    { "id": "page_install", "type": "database", "label": "Guest RAM 页", "sublabel": "copy / memfd / mapping", "pos": [910, 575], "size": [185, 72] }
+    {
+      "id": "rootfs",
+      "type": "external",
+      "label": "只读 Rootfs Lower",
+      "sublabel": "OCI / EROFS / RAFS",
+      "pos": [
+        40,
+        120
+      ],
+      "size": [
+        170,
+        68
+      ]
+    },
+    {
+      "id": "writable",
+      "type": "external",
+      "label": "磁盘视图 / Upper",
+      "sublabel": "ext4 / COW diff",
+      "pos": [
+        40,
+        360
+      ],
+      "size": [
+        170,
+        68
+      ]
+    },
+    {
+      "id": "guest_ram",
+      "type": "external",
+      "label": "Guest RAM",
+      "sublabel": "full / incremental",
+      "pos": [
+        40,
+        540
+      ],
+      "size": [
+        170,
+        68
+      ]
+    },
+    {
+      "id": "file_trigger",
+      "type": "frontend",
+      "label": "VFS / FUSE",
+      "sublabel": "文件 read",
+      "pos": [
+        300,
+        70
+      ],
+      "size": [
+        150,
+        62
+      ]
+    },
+    {
+      "id": "dax_trigger",
+      "type": "frontend",
+      "label": "DAX + UFFD",
+      "sublabel": "HVA missing fault",
+      "pos": [
+        300,
+        210
+      ],
+      "size": [
+        150,
+        62
+      ]
+    },
+    {
+      "id": "block_trigger",
+      "type": "frontend",
+      "label": "Block I/O",
+      "sublabel": "sector request",
+      "pos": [
+        300,
+        380
+      ],
+      "size": [
+        150,
+        62
+      ]
+    },
+    {
+      "id": "memory_trigger",
+      "type": "frontend",
+      "label": "UFFD / Postcopy",
+      "sublabel": "RAM page fault",
+      "pos": [
+        300,
+        540
+      ],
+      "size": [
+        150,
+        62
+      ]
+    },
+    {
+      "id": "image_service",
+      "type": "backend",
+      "label": "镜像内容服务",
+      "sublabel": "range + verify + cache",
+      "pos": [
+        590,
+        145
+      ],
+      "size": [
+        170,
+        68
+      ]
+    },
+    {
+      "id": "block_service",
+      "type": "backend",
+      "label": "块设备后端",
+      "sublabel": "lower + private COW",
+      "pos": [
+        590,
+        380
+      ],
+      "size": [
+        170,
+        68
+      ]
+    },
+    {
+      "id": "page_source",
+      "type": "backend",
+      "label": "内存页来源",
+      "sublabel": "snapshot / page server",
+      "pos": [
+        590,
+        540
+      ],
+      "size": [
+        170,
+        68
+      ]
+    },
+    {
+      "id": "file_mapping",
+      "type": "database",
+      "label": "本地内容视图",
+      "sublabel": "cache / file page / block",
+      "pos": [
+        910,
+        250
+      ],
+      "size": [
+        185,
+        72
+      ]
+    },
+    {
+      "id": "page_install",
+      "type": "database",
+      "label": "Guest RAM 页",
+      "sublabel": "copy / memfd / mapping",
+      "pos": [
+        910,
+        515
+      ],
+      "size": [
+        185,
+        72
+      ]
+    }
   ],
   "boundaries": [
-    { "kind": "region", "label": "Rootfs 数据路径", "wraps": ["rootfs", "file_trigger", "dax_trigger", "image_service", "file_mapping"], "pad": 18 },
-    { "kind": "region", "label": "可写磁盘路径", "wraps": ["writable", "block_trigger", "block_service"], "pad": 16 },
-    { "kind": "region", "label": "内存恢复路径", "wraps": ["guest_ram", "memory_trigger", "page_source", "page_install"], "pad": 16 }
+    {
+      "kind": "region",
+      "label": "独立镜像路径示例",
+      "wraps": [
+        "rootfs",
+        "file_trigger",
+        "dax_trigger",
+        "image_service",
+        "file_mapping"
+      ],
+      "pad": 18
+    },
+    {
+      "kind": "region",
+      "label": "整盘 / 可写层路径",
+      "wraps": [
+        "writable",
+        "block_trigger",
+        "block_service"
+      ],
+      "pad": 16
+    },
+    {
+      "kind": "region",
+      "label": "内存恢复路径",
+      "wraps": [
+        "guest_ram",
+        "memory_trigger",
+        "page_source",
+        "page_install"
+      ],
+      "pad": 16
+    }
   ],
   "connections": [
-    { "from": "rootfs", "to": "file_trigger", "label": "文件访问", "variant": "emphasis" },
-    { "from": "rootfs", "to": "dax_trigger", "label": "pmem 映射", "variant": "emphasis" },
-    { "from": "file_trigger", "to": "image_service", "label": "file/chunk lookup" },
-    { "from": "dax_trigger", "to": "image_service", "label": "offset FETCH" },
-    { "from": "image_service", "to": "file_mapping", "label": "可信 range / FD", "variant": "emphasis" },
-    { "from": "writable", "to": "block_trigger", "label": "读写" },
-    { "from": "block_trigger", "to": "block_service", "label": "block request", "variant": "emphasis" },
-    { "from": "block_service", "to": "file_mapping", "label": "COW block", "variant": "dashed" },
-    { "from": "guest_ram", "to": "memory_trigger", "label": "missing page" },
-    { "from": "memory_trigger", "to": "page_source", "label": "page request", "variant": "emphasis" },
-    { "from": "page_source", "to": "page_install", "label": "copy / pwrite / wake", "variant": "emphasis" }
+    {
+      "from": "rootfs",
+      "to": "file_trigger",
+      "label": "文件访问",
+      "variant": "emphasis"
+    },
+    {
+      "from": "rootfs",
+      "to": "dax_trigger",
+      "label": "pmem 映射",
+      "variant": "emphasis"
+    },
+    {
+      "from": "file_trigger",
+      "to": "image_service",
+      "label": "file/chunk lookup"
+    },
+    {
+      "from": "dax_trigger",
+      "to": "image_service",
+      "label": "range request"
+    },
+    {
+      "from": "image_service",
+      "to": "file_mapping",
+      "label": "可信 range / FD",
+      "variant": "emphasis"
+    },
+    {
+      "from": "writable",
+      "to": "block_trigger",
+      "label": "读写"
+    },
+    {
+      "from": "block_trigger",
+      "to": "block_service",
+      "label": "block request",
+      "variant": "emphasis"
+    },
+    {
+      "from": "block_service",
+      "to": "file_mapping",
+      "label": "COW block",
+      "variant": "dashed"
+    },
+    {
+      "from": "guest_ram",
+      "to": "memory_trigger",
+      "label": "missing page"
+    },
+    {
+      "from": "memory_trigger",
+      "to": "page_source",
+      "label": "page request",
+      "variant": "emphasis"
+    },
+    {
+      "from": "page_source",
+      "to": "page_install",
+      "label": "copy / pwrite / wake",
+      "variant": "emphasis"
+    }
   ],
   "cards": [
-    { "dot": "cyan", "title": "三个对象", "items": ["只读镜像以内容摘要共享", "可写 upper 以快照谱系隔离", "Guest RAM 以 memory snapshot 标识"] },
-    { "dot": "amber", "title": "四类触发", "items": ["文件请求保留路径语义", "块请求兼容普通读写文件系统", "DAX 与内存恢复都可用 UFFD，但 source 不同"] },
-    { "dot": "emerald", "title": "统一边界", "items": ["统一资源状态与失败传播", "不强制共用一种数据协议", "性能收益必须由本地基准验证"] }
+    {
+      "dot": "cyan",
+      "title": "三个对象",
+      "items": [
+        "只读镜像以内容摘要共享",
+        "可写 upper 以快照谱系隔离",
+        "Guest RAM 以 memory snapshot 标识"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "四类触发",
+      "items": [
+        "文件请求保留路径语义",
+        "块请求兼容普通读写文件系统",
+        "DAX 与内存恢复都可用 UFFD，但 source 不同"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "统一边界",
+      "items": [
+        "统一资源状态与失败传播",
+        "可共用基础设施，保留类型语义",
+        "性能收益必须由本地基准验证"
+      ]
+    }
   ]
 }

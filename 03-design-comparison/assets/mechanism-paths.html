@@ -5004,7 +5004,7 @@
     <!-- Main Diagram -->
     <div class="diagram-container" data-detail-level="read"
          data-preset-badge-editorial-plate="ARCHIFY / 图版 04">
-      <svg viewBox="0 0 1260 880" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
+      <svg viewBox="0 0 1260 714" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
         <title id="archify-diagram-title">四类懒加载数据路径对比</title>
         <desc id="archify-diagram-description">由 Archify 生成的架构图。</desc>
         <!-- Definitions -->
@@ -5030,242 +5030,242 @@
         <rect width="100%" height="100%" fill="url(#grid)" />
 
         <!-- Boundaries (behind everything) -->
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="文件级：Nydus / stargz / SOCI" x="39" y="66" width="997" height="106" rx="12" class="c-region" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="文件级：Nydus / stargz / SOCI" x="39" y="56" width="997" height="106" rx="12" class="c-region" stroke-width="1"/>
 
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="1" data-composition-frame-label="块级：OverlayBD / NBD" x="39" y="261" width="997" height="106" rx="12" class="c-region" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="1" data-composition-frame-label="块级：OverlayBD / NBD" x="39" y="221" width="997" height="106" rx="12" class="c-region" stroke-width="1"/>
 
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="2" data-composition-frame-label="Pmem/DAX：Nydus UFFD / 当前目标" x="39" y="456" width="997" height="106" rx="12" class="c-region" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="2" data-composition-frame-label="Pmem/DAX：文件映射候选" x="39" y="386" width="997" height="106" rx="12" class="c-region" stroke-width="1"/>
 
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="3" data-composition-frame-label="内存恢复：Firecracker / CH / QEMU / CRIU" x="39" y="651" width="997" height="106" rx="12" class="c-region" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="3" data-composition-frame-label="内存恢复：Firecracker / CH / QEMU / CRIU" x="39" y="551" width="997" height="106" rx="12" class="c-region" stroke-width="1"/>
 
         <!-- Connection paths (before components for correct z-order) -->
-        <path data-edge-from="file_access" data-edge-to="file_handler" data-edge-label="文件语义" data-edge-key="0" data-composition-points="230,121;430,121" d="M 230 121 L 430 121" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="file_handler" data-edge-to="file_complete" data-edge-label="HTTP Range" data-edge-key="1" data-composition-points="615,121;830,121" d="M 615 121 L 830 121" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="block_access" data-edge-to="block_handler" data-edge-label="块请求" data-edge-key="2" data-composition-points="230,316;430,316" d="M 230 316 L 430 316" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="block_handler" data-edge-to="block_complete" data-edge-label="remote/local blocks" data-edge-key="3" data-composition-points="615,316;830,316" d="M 615 316 L 830 316" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="dax_access" data-edge-to="dax_handler" data-edge-label="UFFD event" data-edge-key="4" data-composition-points="230,511;430,511" d="M 230 511 L 430 511" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="dax_handler" data-edge-to="dax_complete" data-edge-label="SCM_RIGHTS FD" data-edge-key="5" data-composition-points="615,511;830,511" d="M 615 511 L 830 511" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
-        <path data-edge-from="ram_access" data-edge-to="ram_handler" data-edge-label="missing page" data-edge-key="6" data-composition-points="230,706;430,706" d="M 230 706 L 430 706" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="ram_handler" data-edge-to="ram_complete" data-edge-label="page source" data-edge-key="7" data-composition-points="615,706;830,706" d="M 615 706 L 830 706" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="file_access" data-edge-to="file_handler" data-edge-label="文件语义" data-edge-key="0" data-composition-points="230,111;430,111" d="M 230 111 L 430 111" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="file_handler" data-edge-to="file_complete" data-edge-label="HTTP Range" data-edge-key="1" data-composition-points="615,111;830,111" d="M 615 111 L 830 111" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="block_access" data-edge-to="block_handler" data-edge-label="块请求" data-edge-key="2" data-composition-points="230,276;430,276" d="M 230 276 L 430 276" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="block_handler" data-edge-to="block_complete" data-edge-label="remote/local blocks" data-edge-key="3" data-composition-points="615,276;830,276" d="M 615 276 L 830 276" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="dax_access" data-edge-to="dax_handler" data-edge-label="UFFD event" data-edge-key="4" data-composition-points="230,441;430,441" d="M 230 441 L 430 441" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="dax_handler" data-edge-to="dax_complete" data-edge-label="SCM_RIGHTS FD" data-edge-key="5" data-composition-points="615,441;830,441" d="M 615 441 L 830 441" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
+        <path data-edge-from="ram_access" data-edge-to="ram_handler" data-edge-label="missing page" data-edge-key="6" data-composition-points="230,606;430,606" d="M 230 606 L 430 606" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="ram_handler" data-edge-to="ram_complete" data-edge-label="page source" data-edge-key="7" data-composition-points="615,606;830,606" d="M 615 606 L 830 606" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
 
         <!-- Components -->
         <g id="node-file_access" data-node-id="file_access" data-node-label="VFS 文件读取" tabindex="0" role="button" aria-label="聚焦VFS 文件读取，path + offset, 文件级：Nydus / stargz / SOCI" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="path + offset" data-node-context="文件级：Nydus / stargz / SOCI">
           <title>VFS 文件读取 · path + offset · 文件级：Nydus / stargz / SOCI</title>
-          <rect x="55" y="90" width="175" height="62" rx="6" class="c-mask"/>
-          <rect x="55" y="90" width="175" height="62" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(61 96) scale(0.6875)">
+          <rect x="55" y="80" width="175" height="62" rx="6" class="c-mask"/>
+          <rect x="55" y="80" width="175" height="62" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(61 86) scale(0.6875)">
             <rect x="2" y="3" width="12" height="10" rx="2"/>
             <path d="M2 6.5h12"/>
             <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="142.5" y="119" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">VFS 文件读取</text>
-        <text data-detail="context" x="142.5" y="135" class="t-muted" font-size="9" text-anchor="middle">path + offset</text>
+          <text data-node-label="" data-detail-anchor="" x="142.5" y="109" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">VFS 文件读取</text>
+        <text data-detail="context" x="142.5" y="125" class="t-muted" font-size="9" text-anchor="middle">path + offset</text>
         </g>
 
         <g id="node-file_handler" data-node-id="file_handler" data-node-label="FUSE / Image Index" tabindex="0" role="button" aria-label="聚焦FUSE / Image Index，chunk/span lookup, 文件级：Nydus / stargz / SOCI" aria-pressed="false" data-node-kind="backend" data-node-sublabel="chunk/span lookup" data-node-context="文件级：Nydus / stargz / SOCI">
           <title>FUSE / Image Index · chunk/span lookup · 文件级：Nydus / stargz / SOCI</title>
-          <rect x="430" y="90" width="185" height="62" rx="6" class="c-mask"/>
-          <rect x="430" y="90" width="185" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(436 96) scale(0.6875)">
+          <rect x="430" y="80" width="185" height="62" rx="6" class="c-mask"/>
+          <rect x="430" y="80" width="185" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(436 86) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="522.5" y="119" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">FUSE / Image Index</text>
-        <text data-detail="context" x="522.5" y="135" class="t-muted" font-size="9" text-anchor="middle">chunk/span lookup</text>
+          <text data-node-label="" data-detail-anchor="" x="522.5" y="109" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">FUSE / Image Index</text>
+        <text data-detail="context" x="522.5" y="125" class="t-muted" font-size="9" text-anchor="middle">chunk/span lookup</text>
         </g>
 
         <g id="node-file_complete" data-node-id="file_complete" data-node-label="Chunk Cache + Reply" tabindex="0" role="button" aria-label="聚焦Chunk Cache + Reply，解压与校验, 文件级：Nydus / stargz / SOCI" aria-pressed="false" data-node-kind="database" data-node-sublabel="解压与校验" data-node-context="文件级：Nydus / stargz / SOCI">
           <title>Chunk Cache + Reply · 解压与校验 · 文件级：Nydus / stargz / SOCI</title>
-          <rect x="830" y="90" width="190" height="62" rx="6" class="c-mask"/>
-          <rect x="830" y="90" width="190" height="62" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(836 96) scale(0.6875)">
+          <rect x="830" y="80" width="190" height="62" rx="6" class="c-mask"/>
+          <rect x="830" y="80" width="190" height="62" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(836 86) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="925" y="119" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Chunk Cache + Reply</text>
-        <text data-detail="context" x="925" y="135" class="t-muted" font-size="9" text-anchor="middle">解压与校验</text>
+          <text data-node-label="" data-detail-anchor="" x="925" y="109" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Chunk Cache + Reply</text>
+        <text data-detail="context" x="925" y="125" class="t-muted" font-size="9" text-anchor="middle">解压与校验</text>
         </g>
 
         <g id="node-block_access" data-node-id="block_access" data-node-label="Guest Block I/O" tabindex="0" role="button" aria-label="聚焦Guest Block I/O，sector range, 块级：OverlayBD / NBD" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="sector range" data-node-context="块级：OverlayBD / NBD">
           <title>Guest Block I/O · sector range · 块级：OverlayBD / NBD</title>
-          <rect x="55" y="285" width="175" height="62" rx="6" class="c-mask"/>
-          <rect x="55" y="285" width="175" height="62" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(61 291) scale(0.6875)">
+          <rect x="55" y="245" width="175" height="62" rx="6" class="c-mask"/>
+          <rect x="55" y="245" width="175" height="62" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(61 251) scale(0.6875)">
             <rect x="2" y="3" width="12" height="10" rx="2"/>
             <path d="M2 6.5h12"/>
             <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="142.5" y="314" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Guest Block I/O</text>
-        <text data-detail="context" x="142.5" y="330" class="t-muted" font-size="9" text-anchor="middle">sector range</text>
+          <text data-node-label="" data-detail-anchor="" x="142.5" y="274" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Guest Block I/O</text>
+        <text data-detail="context" x="142.5" y="290" class="t-muted" font-size="9" text-anchor="middle">sector range</text>
         </g>
 
         <g id="node-block_handler" data-node-id="block_handler" data-node-label="NBD / Block Layer" tabindex="0" role="button" aria-label="聚焦NBD / Block Layer，parent + COW, 块级：OverlayBD / NBD" aria-pressed="false" data-node-kind="backend" data-node-sublabel="parent + COW" data-node-context="块级：OverlayBD / NBD">
           <title>NBD / Block Layer · parent + COW · 块级：OverlayBD / NBD</title>
-          <rect x="430" y="285" width="185" height="62" rx="6" class="c-mask"/>
-          <rect x="430" y="285" width="185" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(436 291) scale(0.6875)">
+          <rect x="430" y="245" width="185" height="62" rx="6" class="c-mask"/>
+          <rect x="430" y="245" width="185" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(436 251) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="522.5" y="314" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">NBD / Block Layer</text>
-        <text data-detail="context" x="522.5" y="330" class="t-muted" font-size="9" text-anchor="middle">parent + COW</text>
+          <text data-node-label="" data-detail-anchor="" x="522.5" y="274" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">NBD / Block Layer</text>
+        <text data-detail="context" x="522.5" y="290" class="t-muted" font-size="9" text-anchor="middle">parent + COW</text>
         </g>
 
         <g id="node-block_complete" data-node-id="block_complete" data-node-label="Block Cache + Complete" tabindex="0" role="button" aria-label="聚焦Block Cache + Complete，读 lower / 写 upper, 块级：OverlayBD / NBD" aria-pressed="false" data-node-kind="database" data-node-sublabel="读 lower / 写 upper" data-node-context="块级：OverlayBD / NBD">
           <title>Block Cache + Complete · 读 lower / 写 upper · 块级：OverlayBD / NBD</title>
-          <rect x="830" y="285" width="190" height="62" rx="6" class="c-mask"/>
-          <rect x="830" y="285" width="190" height="62" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(836 291) scale(0.6875)">
+          <rect x="830" y="245" width="190" height="62" rx="6" class="c-mask"/>
+          <rect x="830" y="245" width="190" height="62" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(836 251) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="925" y="314" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Block Cache + Complete</text>
-        <text data-detail="context" x="925" y="330" class="t-muted" font-size="9" text-anchor="middle">读 lower / 写 upper</text>
+          <text data-node-label="" data-detail-anchor="" x="925" y="274" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Block Cache + Complete</text>
+        <text data-detail="context" x="925" y="290" class="t-muted" font-size="9" text-anchor="middle">读 lower / 写 upper</text>
         </g>
 
-        <g id="node-dax_access" data-node-id="dax_access" data-node-label="DAX HVA Fault" tabindex="0" role="button" aria-label="聚焦DAX HVA Fault，pmem offset, Pmem/DAX：Nydus UFFD / 当前目标" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="pmem offset" data-node-context="Pmem/DAX：Nydus UFFD / 当前目标">
-          <title>DAX HVA Fault · pmem offset · Pmem/DAX：Nydus UFFD / 当前目标</title>
-          <rect x="55" y="480" width="175" height="62" rx="6" class="c-mask"/>
-          <rect x="55" y="480" width="175" height="62" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(61 486) scale(0.6875)">
+        <g id="node-dax_access" data-node-id="dax_access" data-node-label="DAX HVA Fault" tabindex="0" role="button" aria-label="聚焦DAX HVA Fault，pmem offset, Pmem/DAX：文件映射候选" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="pmem offset" data-node-context="Pmem/DAX：文件映射候选">
+          <title>DAX HVA Fault · pmem offset · Pmem/DAX：文件映射候选</title>
+          <rect x="55" y="410" width="175" height="62" rx="6" class="c-mask"/>
+          <rect x="55" y="410" width="175" height="62" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(61 416) scale(0.6875)">
             <rect x="2" y="3" width="12" height="10" rx="2"/>
             <path d="M2 6.5h12"/>
             <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="142.5" y="509" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">DAX HVA Fault</text>
-        <text data-detail="context" x="142.5" y="525" class="t-muted" font-size="9" text-anchor="middle">pmem offset</text>
+          <text data-node-label="" data-detail-anchor="" x="142.5" y="439" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">DAX HVA Fault</text>
+        <text data-detail="context" x="142.5" y="455" class="t-muted" font-size="9" text-anchor="middle">pmem offset</text>
         </g>
 
-        <g id="node-dax_handler" data-node-id="dax_handler" data-node-label="VMM UFFD Handler" tabindex="0" role="button" aria-label="聚焦VMM UFFD Handler，FETCH + recvFD, Pmem/DAX：Nydus UFFD / 当前目标" aria-pressed="false" data-node-kind="backend" data-node-sublabel="FETCH + recvFD" data-node-context="Pmem/DAX：Nydus UFFD / 当前目标">
-          <title>VMM UFFD Handler · FETCH + recvFD · Pmem/DAX：Nydus UFFD / 当前目标</title>
-          <rect x="430" y="480" width="185" height="62" rx="6" class="c-mask"/>
-          <rect x="430" y="480" width="185" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(436 486) scale(0.6875)">
+        <g id="node-dax_handler" data-node-id="dax_handler" data-node-label="UFFD Handler" tabindex="0" role="button" aria-label="聚焦UFFD Handler，定位 + 请求内容, Pmem/DAX：文件映射候选" aria-pressed="false" data-node-kind="backend" data-node-sublabel="定位 + 请求内容" data-node-context="Pmem/DAX：文件映射候选">
+          <title>UFFD Handler · 定位 + 请求内容 · Pmem/DAX：文件映射候选</title>
+          <rect x="430" y="410" width="185" height="62" rx="6" class="c-mask"/>
+          <rect x="430" y="410" width="185" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(436 416) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="522.5" y="509" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">VMM UFFD Handler</text>
-        <text data-detail="context" x="522.5" y="525" class="t-muted" font-size="9" text-anchor="middle">FETCH + recvFD</text>
+          <text data-node-label="" data-detail-anchor="" x="522.5" y="439" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">UFFD Handler</text>
+        <text data-detail="context" x="522.5" y="455" class="t-muted" font-size="9" text-anchor="middle">定位 + 请求内容</text>
         </g>
 
-        <g id="node-dax_complete" data-node-id="dax_complete" data-node-label="File Remap + Wake" tabindex="0" role="button" aria-label="聚焦File Remap + Wake，MAP_FIXED range, Pmem/DAX：Nydus UFFD / 当前目标" aria-pressed="false" data-node-kind="database" data-node-sublabel="MAP_FIXED range" data-node-context="Pmem/DAX：Nydus UFFD / 当前目标">
-          <title>File Remap + Wake · MAP_FIXED range · Pmem/DAX：Nydus UFFD / 当前目标</title>
-          <rect x="830" y="480" width="190" height="62" rx="6" class="c-mask"/>
-          <rect x="830" y="480" width="190" height="62" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(836 486) scale(0.6875)">
+        <g id="node-dax_complete" data-node-id="dax_complete" data-node-label="File Remap + Wake" tabindex="0" role="button" aria-label="聚焦File Remap + Wake，MAP_FIXED range, Pmem/DAX：文件映射候选" aria-pressed="false" data-node-kind="database" data-node-sublabel="MAP_FIXED range" data-node-context="Pmem/DAX：文件映射候选">
+          <title>File Remap + Wake · MAP_FIXED range · Pmem/DAX：文件映射候选</title>
+          <rect x="830" y="410" width="190" height="62" rx="6" class="c-mask"/>
+          <rect x="830" y="410" width="190" height="62" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(836 416) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="925" y="509" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">File Remap + Wake</text>
-        <text data-detail="context" x="925" y="525" class="t-muted" font-size="9" text-anchor="middle">MAP_FIXED range</text>
+          <text data-node-label="" data-detail-anchor="" x="925" y="439" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">File Remap + Wake</text>
+        <text data-detail="context" x="925" y="455" class="t-muted" font-size="9" text-anchor="middle">MAP_FIXED range</text>
         </g>
 
         <g id="node-ram_access" data-node-id="ram_access" data-node-label="Guest RAM Fault" tabindex="0" role="button" aria-label="聚焦Guest RAM Fault，memory page, 内存恢复：Firecracker / CH / QEMU / CRIU" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="memory page" data-node-context="内存恢复：Firecracker / CH / QEMU / CRIU">
           <title>Guest RAM Fault · memory page · 内存恢复：Firecracker / CH / QEMU / CRIU</title>
-          <rect x="55" y="675" width="175" height="62" rx="6" class="c-mask"/>
-          <rect x="55" y="675" width="175" height="62" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(61 681) scale(0.6875)">
+          <rect x="55" y="575" width="175" height="62" rx="6" class="c-mask"/>
+          <rect x="55" y="575" width="175" height="62" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(61 581) scale(0.6875)">
             <rect x="2" y="3" width="12" height="10" rx="2"/>
             <path d="M2 6.5h12"/>
             <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="142.5" y="704" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Guest RAM Fault</text>
-        <text data-detail="context" x="142.5" y="720" class="t-muted" font-size="9" text-anchor="middle">memory page</text>
+          <text data-node-label="" data-detail-anchor="" x="142.5" y="604" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Guest RAM Fault</text>
+        <text data-detail="context" x="142.5" y="620" class="t-muted" font-size="9" text-anchor="middle">memory page</text>
         </g>
 
         <g id="node-ram_handler" data-node-id="ram_handler" data-node-label="Restore UFFD / Postcopy" tabindex="0" role="button" aria-label="聚焦Restore UFFD / Postcopy，snapshot lookup, 内存恢复：Firecracker / CH / QEMU / CRIU" aria-pressed="false" data-node-kind="backend" data-node-sublabel="snapshot lookup" data-node-context="内存恢复：Firecracker / CH / QEMU / CRIU">
           <title>Restore UFFD / Postcopy · snapshot lookup · 内存恢复：Firecracker / CH / QEMU / CRIU</title>
-          <rect x="430" y="675" width="185" height="62" rx="6" class="c-mask"/>
-          <rect x="430" y="675" width="185" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(436 681) scale(0.6875)">
+          <rect x="430" y="575" width="185" height="62" rx="6" class="c-mask"/>
+          <rect x="430" y="575" width="185" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(436 581) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="522.5" y="704" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Restore UFFD / Postcopy</text>
-        <text data-detail="context" x="522.5" y="720" class="t-muted" font-size="9" text-anchor="middle">snapshot lookup</text>
+          <text data-node-label="" data-detail-anchor="" x="522.5" y="604" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Restore UFFD / Postcopy</text>
+        <text data-detail="context" x="522.5" y="620" class="t-muted" font-size="9" text-anchor="middle">snapshot lookup</text>
         </g>
 
         <g id="node-ram_complete" data-node-id="ram_complete" data-node-label="Install Page + Wake" tabindex="0" role="button" aria-label="聚焦Install Page + Wake，copy / memfd / map, 内存恢复：Firecracker / CH / QEMU / CRIU" aria-pressed="false" data-node-kind="database" data-node-sublabel="copy / memfd / map" data-node-context="内存恢复：Firecracker / CH / QEMU / CRIU">
           <title>Install Page + Wake · copy / memfd / map · 内存恢复：Firecracker / CH / QEMU / CRIU</title>
-          <rect x="830" y="675" width="190" height="62" rx="6" class="c-mask"/>
-          <rect x="830" y="675" width="190" height="62" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(836 681) scale(0.6875)">
+          <rect x="830" y="575" width="190" height="62" rx="6" class="c-mask"/>
+          <rect x="830" y="575" width="190" height="62" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(836 581) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="925" y="704" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Install Page + Wake</text>
-        <text data-detail="context" x="925" y="720" class="t-muted" font-size="9" text-anchor="middle">copy / memfd / map</text>
+          <text data-node-label="" data-detail-anchor="" x="925" y="604" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Install Page + Wake</text>
+        <text data-detail="context" x="925" y="620" class="t-muted" font-size="9" text-anchor="middle">copy / memfd / map</text>
         </g>
 
         <!-- Connection labels -->
         <g data-detail="context" data-edge-from="file_access" data-edge-to="file_handler" data-edge-label="文件语义" data-edge-key="0">
-          <rect x="305.8" y="101" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="330" y="111" class="t-backend" font-size="8" text-anchor="middle">文件语义</text>
+          <rect x="305.8" y="91" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="330" y="101" class="t-backend" font-size="8" text-anchor="middle">文件语义</text>
         </g>
         <g data-detail="context" data-edge-from="file_handler" data-edge-to="file_complete" data-edge-label="HTTP Range" data-edge-key="1">
-          <rect x="693.5" y="101" width="58" height="14" rx="3" class="c-mask"/>
-          <text x="722.5" y="111" class="t-muted" font-size="8" text-anchor="middle">HTTP Range</text>
+          <rect x="693.5" y="91" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="722.5" y="101" class="t-muted" font-size="8" text-anchor="middle">HTTP Range</text>
         </g>
         <g data-detail="context" data-edge-from="block_access" data-edge-to="block_handler" data-edge-label="块请求" data-edge-key="2">
-          <rect x="310.6" y="296" width="38.8" height="14" rx="3" class="c-mask"/>
-          <text x="330" y="306" class="t-backend" font-size="8" text-anchor="middle">块请求</text>
+          <rect x="310.6" y="256" width="38.8" height="14" rx="3" class="c-mask"/>
+          <text x="330" y="266" class="t-backend" font-size="8" text-anchor="middle">块请求</text>
         </g>
         <g data-detail="context" data-edge-from="block_handler" data-edge-to="block_complete" data-edge-label="remote/local blocks" data-edge-key="3">
-          <rect x="671.9" y="296" width="101.2" height="14" rx="3" class="c-mask"/>
-          <text x="722.5" y="306" class="t-muted" font-size="8" text-anchor="middle">remote/local blocks</text>
+          <rect x="671.9" y="256" width="101.2" height="14" rx="3" class="c-mask"/>
+          <text x="722.5" y="266" class="t-muted" font-size="8" text-anchor="middle">remote/local blocks</text>
         </g>
         <g data-detail="context" data-edge-from="dax_access" data-edge-to="dax_handler" data-edge-label="UFFD event" data-edge-key="4">
-          <rect x="301" y="491" width="58" height="14" rx="3" class="c-mask"/>
-          <text x="330" y="501" class="t-backend" font-size="8" text-anchor="middle">UFFD event</text>
+          <rect x="301" y="421" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="330" y="431" class="t-backend" font-size="8" text-anchor="middle">UFFD event</text>
         </g>
         <g data-detail="context" data-edge-from="dax_handler" data-edge-to="dax_complete" data-edge-label="SCM_RIGHTS FD" data-edge-key="5">
-          <rect x="686.3" y="491" width="72.4" height="14" rx="3" class="c-mask"/>
-          <text x="722.5" y="501" class="t-security" font-size="8" text-anchor="middle">SCM_RIGHTS FD</text>
+          <rect x="686.3" y="421" width="72.4" height="14" rx="3" class="c-mask"/>
+          <text x="722.5" y="431" class="t-security" font-size="8" text-anchor="middle">SCM_RIGHTS FD</text>
         </g>
         <g data-detail="context" data-edge-from="ram_access" data-edge-to="ram_handler" data-edge-label="missing page" data-edge-key="6">
-          <rect x="296.2" y="686" width="67.6" height="14" rx="3" class="c-mask"/>
-          <text x="330" y="696" class="t-backend" font-size="8" text-anchor="middle">missing page</text>
+          <rect x="296.2" y="586" width="67.6" height="14" rx="3" class="c-mask"/>
+          <text x="330" y="596" class="t-backend" font-size="8" text-anchor="middle">missing page</text>
         </g>
         <g data-detail="context" data-edge-from="ram_handler" data-edge-to="ram_complete" data-edge-label="page source" data-edge-key="7">
-          <rect x="691.1" y="686" width="62.8" height="14" rx="3" class="c-mask"/>
-          <text x="722.5" y="696" class="t-muted" font-size="8" text-anchor="middle">page source</text>
+          <rect x="691.1" y="586" width="62.8" height="14" rx="3" class="c-mask"/>
+          <text x="722.5" y="596" class="t-muted" font-size="8" text-anchor="middle">page source</text>
         </g>
 
         <!-- Boundary labels (foreground masks keep routes out of titles) -->
         <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="region" data-composition-frame-label="文件级：Nydus / stargz / SOCI">
-          <rect data-graph-role="structural-frame-label-mask" x="43" y="70" width="166.6" height="16" rx="3" class="c-mask"/>
-          <text data-boundary-label="" x="47" y="83" class="t-cloud" font-size="9" font-weight="600">文件级：Nydus / stargz / SOCI</text>
+          <rect data-graph-role="structural-frame-label-mask" x="43" y="60" width="166.6" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="47" y="73" class="t-cloud" font-size="9" font-weight="600">文件级：Nydus / stargz / SOCI</text>
         </g>
 
         <g data-graph-role="structural-frame-label" data-composition-frame-id="1" data-composition-frame-kind="region" data-composition-frame-label="块级：OverlayBD / NBD">
-          <rect data-graph-role="structural-frame-label-mask" x="43" y="265" width="123.39999999999999" height="16" rx="3" class="c-mask"/>
-          <text data-boundary-label="" x="47" y="278" class="t-cloud" font-size="9" font-weight="600">块级：OverlayBD / NBD</text>
+          <rect data-graph-role="structural-frame-label-mask" x="43" y="225" width="123.39999999999999" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="47" y="238" class="t-cloud" font-size="9" font-weight="600">块级：OverlayBD / NBD</text>
         </g>
 
-        <g data-graph-role="structural-frame-label" data-composition-frame-id="2" data-composition-frame-kind="region" data-composition-frame-label="Pmem/DAX：Nydus UFFD / 当前目标">
-          <rect data-graph-role="structural-frame-label-mask" x="43" y="460" width="177.4" height="16" rx="3" class="c-mask"/>
-          <text data-boundary-label="" x="47" y="473" class="t-cloud" font-size="9" font-weight="600">Pmem/DAX：Nydus UFFD / 当前目标</text>
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="2" data-composition-frame-kind="region" data-composition-frame-label="Pmem/DAX：文件映射候选">
+          <rect data-graph-role="structural-frame-label-mask" x="43" y="390" width="128.8" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="47" y="403" class="t-cloud" font-size="9" font-weight="600">Pmem/DAX：文件映射候选</text>
         </g>
 
         <g data-graph-role="structural-frame-label" data-composition-frame-id="3" data-composition-frame-kind="region" data-composition-frame-label="内存恢复：Firecracker / CH / QEMU / CRIU">
-          <rect data-graph-role="structural-frame-label-mask" x="43" y="655" width="226" height="16" rx="3" class="c-mask"/>
-          <text data-boundary-label="" x="47" y="668" class="t-cloud" font-size="9" font-weight="600">内存恢复：Firecracker / CH / QEMU / CRIU</text>
+          <rect data-graph-role="structural-frame-label-mask" x="43" y="555" width="226" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="47" y="568" class="t-cloud" font-size="9" font-weight="600">内存恢复：Firecracker / CH / QEMU / CRIU</text>
         </g>
 
         <!-- Legend -->
         <g data-legend="" data-legend-bridge="">
-          <text x="40" y="844" class="t-primary" font-size="12" font-weight="650">图例</text>
-          <g data-legend-semantic-kind="frontend" data-legend-kind="frontend" data-legend-label="前端" data-legend-x="40" data-legend-baseline="864" data-legend-width="63">
-            <rect x="40" y="855" width="16" height="10" rx="2.5" class="c-frontend" stroke-width="1"/>
-            <text x="62" y="864" class="t-muted" font-size="10" font-weight="500">前端</text>
+          <text x="40" y="678" class="t-primary" font-size="12" font-weight="650">图例</text>
+          <g data-legend-semantic-kind="frontend" data-legend-kind="frontend" data-legend-label="前端" data-legend-x="40" data-legend-baseline="698" data-legend-width="63">
+            <rect x="40" y="689" width="16" height="10" rx="2.5" class="c-frontend" stroke-width="1"/>
+            <text x="62" y="698" class="t-muted" font-size="10" font-weight="500">前端</text>
           </g>
-          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="后端" data-legend-x="125" data-legend-baseline="864" data-legend-width="63">
-            <rect x="125" y="855" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
-            <text x="147" y="864" class="t-muted" font-size="10" font-weight="500">后端</text>
+          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="后端" data-legend-x="125" data-legend-baseline="698" data-legend-width="63">
+            <rect x="125" y="689" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
+            <text x="147" y="698" class="t-muted" font-size="10" font-weight="500">后端</text>
           </g>
-          <g data-legend-semantic-kind="database" data-legend-kind="database" data-legend-label="数据库" data-legend-x="210" data-legend-baseline="864" data-legend-width="73">
-            <rect x="210" y="855" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
-            <text x="232" y="864" class="t-muted" font-size="10" font-weight="500">数据库</text>
+          <g data-legend-semantic-kind="database" data-legend-kind="database" data-legend-label="数据库" data-legend-x="210" data-legend-baseline="698" data-legend-width="73">
+            <rect x="210" y="689" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
+            <text x="232" y="698" class="t-muted" font-size="10" font-weight="500">数据库</text>
           </g>
         </g>
       </svg>
@@ -5481,12 +5481,12 @@
       <div class="card">
         <div class="card-header">
           <div class="card-dot rose"></div>
-          <h3>不能混用</h3>
+          <h3>类型语义</h3>
         </div>
         <ul>
           <li>&bull; 同为 UFFD 不代表同一 snapshot identity</li>
           <li>&bull; 只读 EROFS lower 不承载 ext4 journal</li>
-          <li>&bull; rootfs cache 不保存 Guest RAM</li>
+          <li>&bull; 内容缓存可共用，RAM 写入须隔离</li>
         </ul>
       </div>
     </div>

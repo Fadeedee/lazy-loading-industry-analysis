@@ -2,65 +2,161 @@
   "schema_version": 1,
   "diagram_type": "sequence",
   "meta": {
-    "title": "冷启动 Rootfs 懒加载时序",
+    "title": "冷启动：三仓共同交付可用沙箱（建议）",
     "locale": "zh-CN",
-    "viewBox": [1080, 1180],
+    "viewBox": [
+      1080,
+      680
+    ],
     "column_fit": "spread",
-    "quality_profile": "showcase",
-    "views": [
-      { "id": "prepare", "label": "Template 准备", "focus": ["user", "conch", "containerd", "registry", "lazyd"], "note": "只准备 metadata、sparse cache 和 bitmap。" },
-      { "id": "boot", "label": "VMM 初始化", "focus": ["conch", "stratovirt", "kvm", "guest"], "note": "HVA、memslot、UFFD 和 handler 先于 vCPU ready。" },
-      { "id": "fault", "label": "首次 Fault", "focus": ["guest", "kvm", "stratovirt", "lazyd", "registry"], "note": "FETCH 返回完整 ready range 与 cache FD。" }
-    ]
+    "quality_profile": "showcase"
   },
   "participants": [
-    { "id": "user", "type": "external", "label": "用户 / SDK", "sublabel": "Template + Sandbox" },
-    { "id": "conch", "type": "backend", "label": "Conch", "sublabel": "编排" },
-    { "id": "containerd", "type": "database", "label": "containerd", "sublabel": "metadata stores" },
-    { "id": "registry", "type": "cloud", "label": "OCI Registry", "sublabel": "metadata + range" },
-    { "id": "lazyd", "type": "backend", "label": "lazyd", "sublabel": "cache + FETCH" },
-    { "id": "stratovirt", "type": "backend", "label": "StratoVirt", "sublabel": "VMM + fault loop" },
-    { "id": "kvm", "type": "security", "label": "KVM", "sublabel": "GPA -> HVA" },
-    { "id": "guest", "type": "frontend", "label": "Guest", "sublabel": "EROFS+DAX" }
-  ],
-  "segments": [
-    { "from": 150, "to": 410, "label": "Lazy Template 准备" },
-    { "from": 430, "to": 690, "label": "Sandbox 与 VMM 初始化" },
-    { "from": 710, "to": 1040, "label": "Guest 首次读取" }
+    {
+      "id": "caller",
+      "type": "external",
+      "label": "用户 / SDK",
+      "sublabel": "操作发起者"
+    },
+    {
+      "id": "controller",
+      "type": "backend",
+      "label": "Conch",
+      "sublabel": "统一状态与引用"
+    },
+    {
+      "id": "supplier",
+      "type": "backend",
+      "label": "供数角色",
+      "sublabel": "lazyd / 类型适配"
+    },
+    {
+      "id": "vmm",
+      "type": "backend",
+      "label": "StratoVirt",
+      "sublabel": "设备、内存与执行"
+    },
+    {
+      "id": "guest",
+      "type": "frontend",
+      "label": "Guest / guestd",
+      "sublabel": "挂载与业务"
+    }
   ],
   "messages": [
-    { "id": "prepare_request", "from": "user", "to": "conch", "y": 185, "label": "准备 Lazy Template", "variant": "emphasis" },
-    { "id": "metadata_pull", "from": "conch", "to": "registry", "y": 225, "label": "拉 Boot Index / descriptors" },
-    { "id": "metadata_return", "from": "registry", "to": "conch", "y": 260, "label": "rootfs EROFS descriptors", "variant": "return" },
-    { "id": "prepare_layers", "from": "conch", "to": "lazyd", "y": 305, "label": "Prepare(descriptors, unit, alignment)", "variant": "emphasis" },
-    { "id": "prepare_result", "from": "lazyd", "to": "conch", "y": 345, "label": "instance_id + sizes", "variant": "return" },
-    { "id": "publish_metadata", "from": "conch", "to": "containerd", "y": 390, "label": "写 PreparedRootfs 并发布 Template" },
-    { "id": "create_sandbox", "from": "user", "to": "conch", "y": 465, "label": "CreateSandbox(template)", "variant": "emphasis" },
-    { "id": "resolve_boot", "from": "conch", "to": "containerd", "y": 505, "label": "Resolve Boot Index + PreparedRootfs" },
-    { "id": "start_sv", "from": "conch", "to": "stratovirt", "y": 550, "label": "启动 lazy virtio-pmem" },
-    { "id": "register_slot", "from": "stratovirt", "to": "kvm", "y": 590, "label": "anonymous HVA + memslot + UFFD", "variant": "security" },
-    { "id": "handler_ready", "from": "stratovirt", "to": "conch", "y": 635, "label": "fault loop / VMM ready", "variant": "return" },
-    { "id": "mount_dax", "from": "stratovirt", "to": "guest", "y": 675, "label": "暴露 pmem；mount EROFS ro,dax" },
-    { "id": "guest_read", "from": "guest", "to": "kvm", "y": 750, "label": "首次文件读取：pmem GPA", "variant": "emphasis" },
-    { "id": "uffd_event", "from": "kvm", "to": "stratovirt", "y": 795, "label": "HVA missing / UFFD event", "variant": "security" },
-    { "id": "fetch", "from": "stratovirt", "to": "lazyd", "y": 840, "label": "FETCH(instance, off, len)", "variant": "emphasis" },
-    { "id": "range", "from": "lazyd", "to": "registry", "y": 880, "label": "bitmap miss：HTTP Range", "variant": "dashed" },
-    { "id": "range_data", "from": "registry", "to": "lazyd", "y": 920, "label": "data；校验、sync、ready", "variant": "return" },
-    { "id": "send_fd", "from": "lazyd", "to": "stratovirt", "y": 965, "label": "fetch_ok + SCM_RIGHTS cache FD", "variant": "security" },
-    { "id": "remap", "from": "stratovirt", "to": "kvm", "y": 1005, "label": "MAP_FIXED ready range + WAKE", "variant": "emphasis" },
-    { "id": "read_complete", "from": "kvm", "to": "guest", "y": 1045, "label": "vCPU 重试；file page 命中", "variant": "return" }
-  ],
-  "activations": [
-    { "participant": "conch", "from": 180, "to": 400, "type": "backend" },
-    { "participant": "lazyd", "from": 300, "to": 355, "type": "backend" },
-    { "participant": "conch", "from": 460, "to": 685, "type": "backend" },
-    { "participant": "stratovirt", "from": 545, "to": 680, "type": "backend" },
-    { "participant": "stratovirt", "from": 790, "to": 1015, "type": "backend" },
-    { "participant": "lazyd", "from": 835, "to": 975, "type": "backend" }
+    {
+      "id": "step1",
+      "from": "caller",
+      "to": "controller",
+      "label": "创建沙箱",
+      "variant": "emphasis",
+      "y": 160
+    },
+    {
+      "id": "step2",
+      "from": "controller",
+      "to": "supplier",
+      "label": "准备资源与授权",
+      "variant": "default",
+      "y": 196
+    },
+    {
+      "id": "step3",
+      "from": "supplier",
+      "to": "controller",
+      "label": "可用条件与运行句柄",
+      "variant": "return",
+      "y": 232
+    },
+    {
+      "id": "step4",
+      "from": "controller",
+      "to": "vmm",
+      "label": "接入资源，保持受控",
+      "variant": "emphasis",
+      "y": 268
+    },
+    {
+      "id": "step5",
+      "from": "vmm",
+      "to": "supplier",
+      "label": "建立所选数据源连接",
+      "variant": "security",
+      "y": 304
+    },
+    {
+      "id": "step6",
+      "from": "vmm",
+      "to": "controller",
+      "label": "报告接入就绪",
+      "variant": "return",
+      "y": 340
+    },
+    {
+      "id": "step7",
+      "from": "controller",
+      "to": "vmm",
+      "label": "允许启动",
+      "variant": "emphasis",
+      "y": 376
+    },
+    {
+      "id": "step8",
+      "from": "vmm",
+      "to": "guest",
+      "label": "设备暴露与 guestd 组装",
+      "variant": "default",
+      "y": 412
+    },
+    {
+      "id": "step9",
+      "from": "guest",
+      "to": "vmm",
+      "label": "首次数据访问",
+      "variant": "emphasis",
+      "y": 448
+    },
+    {
+      "id": "step10",
+      "from": "supplier",
+      "to": "vmm",
+      "label": "按选定机制供数并完成",
+      "variant": "security",
+      "y": 484
+    },
+    {
+      "id": "step11",
+      "from": "vmm",
+      "to": "guest",
+      "label": "继续执行",
+      "variant": "return",
+      "y": 520
+    },
+    {
+      "id": "step12",
+      "from": "controller",
+      "to": "caller",
+      "label": "报告业务就绪或失败",
+      "variant": "return",
+      "y": 556
+    }
   ],
   "cards": [
-    { "dot": "cyan", "title": "准备不下载完整 Layer", "items": ["Conch 选择 descriptor", "lazyd 创建 digest cache 与 bitmap", "containerd 只持久化 PreparedRootfs metadata"] },
-    { "dot": "amber", "title": "地址关系", "items": ["Guest GVA -> pmem GPA", "KVM memslot -> StratoVirt HVA", "UFFD 监听 HVA missing fault"] },
-    { "dot": "emerald", "title": "完成路径", "items": ["数据先持久化再标 ready", "FD 与完整 ready range 一起返回", "fixed remap 后显式 wake vCPU"] }
+    {
+      "dot": "cyan",
+      "title": "图的层次",
+      "items": [
+        "表示角色协作，不规定 handler 进程位置",
+        "请求、FD 和 UFFD 的准确方向由选定方案细化"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "失败与就绪",
+      "items": [
+        "状态恢复也可能访问内存，来源须提前可用",
+        "失败报告 Conch，取消并释放本次 attachment"
+      ]
+    }
   ]
 }
