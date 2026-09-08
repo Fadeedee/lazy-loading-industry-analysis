@@ -1,6 +1,6 @@
 # lazyd 职责与内部重构
 
-> 阅读完成后，读者能够说明 lazyd 如何作为内容服务支持 fanotify 和 virtio-pmem 两类 frontend，并列出当前代码在合入前需要收敛的点。
+> 阅读完成后，读者能够说明 lazyd 如何通过 HTTP 控制面和 FETCH 数据面服务 virtio-pmem 懒加载，并区分本次目标与历史兼容范围。
 
 ## 核心定位
 
@@ -18,8 +18,7 @@ lazyd 是 immutable range content service，不是 VMM handler 或 sandbox manag
 ## 推荐内部结构
 
 ```text
-frontends
-  ├── fanotify adapter
+目标接口
   ├── HTTP control adapter
   └── seqpacket FETCH adapter
           |
@@ -32,7 +31,13 @@ content core
   └── RemoteBackend(OCI/...)
 ```
 
-fanotify 与 UFFD 场景并列存在，但 UFFD event 本身由 StratoVirt 处理。lazyd只接收按 instance/offset/len 表达的 FETCH。
+Conch 调用 HTTP 控制面准备内容；StratoVirt 处理 UFFD event，并向 lazyd 发送按 instance/offset/len 表达的 FETCH。图中的 adapter 是建议的职责划分，不表示代码中已存在同名模块。
+
+## fanotify 的范围说明
+
+当前 Conch + StratoVirt 方案暂不考虑 fanotify，不将其作为目标接口、启动依赖或本次验收项。Guest EROFS+DAX 访问通过 pmem GPA 落到 StratoVirt HVA，不能依靠宿主机 fanotify 为这条路径拦截缺失内容访问；触发入口由 StratoVirt 的 UFFD handler 承担。
+
+已有 fanotify 相关能力属于普通容器/VFS 场景的历史兼容范围，可暂时保留。此次设计不要求新增或重构 fanotify adapter，也不据此删除历史实现；是否继续维护或移除，留待明确其使用需求后独立决定。业界产品章节中的 fanotify 仍用于描述相应产品，不代表本项目采用。
 
 ## 已有正确性基础
 

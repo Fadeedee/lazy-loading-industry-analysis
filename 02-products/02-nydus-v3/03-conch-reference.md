@@ -5,7 +5,7 @@
 ## 直接采用的思想
 
 - lazyd 内部把 OCI backend、EROFS 解析、cache、bitmap 和 prefetch 做成共享 core。
-- fanotify、UFFD 和未来 block frontend 只做触发/协议适配，不复制内容供应逻辑。
+- 借鉴接口与内容核心分层：当前 lazyd 提供 HTTP control 和 seqpacket FETCH，复用内容供应逻辑；UFFD handler 位于 StratoVirt。
 - dedup identity 与 compression/fetch unit 解耦。
 - 并发 VM 对同一 digest/range 使用 inflight 去重和完成 fan-out。
 - 预取根据 trace/工作集生成，不把固定全量 read-ahead 当唯一策略。
@@ -20,6 +20,6 @@
 
 - 不承诺 v3 artifact/API 兼容。
 - 不直接引用分支性能数字作为项目验收目标。
-- 不在第一阶段同时实现 FUSE、NBD、ublk、fanotify 和 UFFD 全部 frontend。
+- 当前目标不引入 fanotify，也不照搬 Nydus v3 的全部 FUSE、NBD、ublk、UFFD frontend；已有 fanotify 能力仅属历史兼容范围。
 
 最合理的近期路径是：保留现有三仓实现边界，用 v3 的 core/frontend 分层审视 lazyd 重构，而不是替换整个项目。

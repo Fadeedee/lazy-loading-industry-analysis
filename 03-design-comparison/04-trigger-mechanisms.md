@@ -27,8 +27,8 @@
 
 ## 对本项目
 
-- fanotify 保留为普通容器/VFS 场景 frontend；
-- UFFD 是 virtio-pmem+DAX frontend；
+- 当前目标暂不考虑 fanotify；已有普通容器/VFS 能力只属于历史兼容范围，不作为本次开发依赖；
+- virtio-pmem+DAX 的 UFFD handler 位于 StratoVirt，lazyd 接收 seqpacket FETCH；
 - 未来 writable snapshot 采用 block request frontend；
 - 未来 memory restore 采用独立 UFFD/postcopy frontend；
 - lazyd core 可以复用内容取数能力，但 frontend-specific metadata 不进入通用 cache identity。

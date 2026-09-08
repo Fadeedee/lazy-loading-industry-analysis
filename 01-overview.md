@@ -89,6 +89,8 @@ lazyd 应继续收敛为不可变内容服务：
 - 对多个 VM 返回同一内容文件的只读 FD，让 host page cache 成为共享物理页来源；
 - VM 退出只释放 lease/reference，不直接删除共享 cache。
 
+当前目标接口为 HTTP prepare 控制面和 seqpacket FETCH 数据面，UFFD handler 位于 StratoVirt。fanotify 暂不纳入本方案；已有相关能力仅作历史兼容保留，不构成本次开发依赖，详见 [lazyd 职责与范围说明](04-conch-design-reference/04-lazyd-responsibilities.md)。
+
 现有实现可复用，但在产品化前应补：只读 FD 导出、条件变量/通知式 inflight fan-out、可信 recovery 校验、credential provider/rotation、lease/refcount 与 GC。[SRC-LAZYD-001]
 
 ### StratoVirt
@@ -167,6 +169,8 @@ Conch PR #155 与 StratoVirt PR #2017 若按当前方向合入，可提供 incre
 - [内容缓存生命周期（HTML）](04-conch-design-reference/assets/content-cache-lifecycle.html)
 
 ## 继续阅读
+
+- 逐项核对“怎么设计、参考哪里、对方做了什么”：[设计决策与业界依据](04-conch-design-reference/08-design-decisions-and-evidence.md)
 
 - 产品成熟度：[成熟度矩阵](appendix/maturity-matrix.md)
 - 事实和版本：[来源清单](appendix/source-inventory.md)
