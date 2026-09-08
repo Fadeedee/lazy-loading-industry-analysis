@@ -15,7 +15,7 @@ eStargz 的 TOC/chunk 支持按文件范围读取；prioritized files 放在 lan
 | 项目 | 可考虑的改动 |
 | --- | --- |
 | Conch | 构建、转换和 Template prepare 都可携带版本化工作集；决定是否等待预取并计入启动时间。 |
-| StratoVirt | 若走 DAX，访问只看到地址，需要额外索引/trace 才能还原文件工作集；也可比较文件服务路线。 |
+| StratoVirt | 若走 DAX，只在必要时提供最小地址观测；文件工作集由构建/数据服务的索引或 trace 还原，不在 VMM 增加文件索引与预取算法。 |
 | lazyd | 执行有界预取、缓存校验和前台去重，按可用信息选择文件或范围策略。 |
 
 ## 选择与差异

@@ -20,7 +20,7 @@ v53 发布说明包含 demand-paged guest memory restore、snapshot/restore offl
 
 ## 选择与差异
 
-共享 UFFD 或传输框架可行，但 region kind、写权限和代次要明确。某 PR 未合入不是强制两套服务或拒绝统一协议的技术证明。
+共享 UFFD 或传输框架可以评估，但 region kind、写权限和代次要明确。首版先复用 StratoVirt 已有恢复契约，不以统一 pmem/RAM 框架为前置。某 PR 未合入不是强制两套服务或拒绝统一协议的技术证明；也不是我们必须重构 VMM 的理由。
 
 ## 如何验证
 

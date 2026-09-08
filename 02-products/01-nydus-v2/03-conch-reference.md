@@ -15,7 +15,7 @@
 | 项目 | 可考虑的改动 |
 | --- | --- |
 | Conch | 管理 source/attachment、授权和 handler 就绪/失败，不只传镜像名。 |
-| StratoVirt | 比较复用外部 UFFD 与内部 handler；文件 remap 仍由 VMM 校验并执行。 |
+| StratoVirt | 先验证外部 UFFD 复用，内部 handler 仅作必要对照；首版只实现选定路径，文件 remap 仍由 VMM 校验并执行。 |
 | lazyd | 可把 UFFD 适配放在内容核心之外，复用取数、缓存与校验；不必固定为只接范围请求。 |
 
 ## 选择与差异

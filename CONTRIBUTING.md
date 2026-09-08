@@ -16,6 +16,7 @@
 ## 设计不被既有实现绑定
 
 - Conch、StratoVirt、lazyd 都是可共同修改的项目，不把本仓库写成 lazyd 单方扩展指南。
+- 联合设计不等于三仓同等扩张。StratoVirt 只补必要的设备、地址空间、页完成和运行控制能力；内容与策略留在 Conch/数据源。候选实验不累加成首版功能，统一框架不是默认前置，边界以 [StratoVirt 职责](04-conch-design-reference/05-stratovirt-responsibilities.md)为准。
 - 从 prepare、create/restore、访问、checkpoint、stop/GC 等用户场景推导职责，再选择进程边界。
 - 实施时以各仓最新 upstream/dev 为基线并固定 commit；文档核查日期不能代替开工前核查。
 - 不默认继承某个 ABI、handler 位置、缓存格式或“不做某优化”的限制；保留正确性约束，对候选列出选择条件与验证门槛。

@@ -10,6 +10,8 @@
 
 我们希望业务更早可用，不是只让 pull 更快。以下八项分别说明建议、替代方案、证据及验证；接口名和进程数尚未冻结。
 
+**联合设计，分清改动边界：** Conch 管资源和整体流程，lazyd/数据源管内容与供数，StratoVirt 只补设备、地址空间、页完成和运行控制的必要能力。下文候选用于选型，不是首版功能累加清单；VMM 的具体范围见[StratoVirt 职责](05-stratovirt-responsibilities.md)。
+
 | 用户遇到的问题 | 从哪里看 |
 | --- | --- |
 | 镜像太大，必须全下载才能启动吗 | 第 1 节 |
@@ -55,7 +57,7 @@ VM1 下载了一个库，VM2 应在授权允许时直接复用。缓存身份要
 
 ### 三仓怎样协作
 
-Conch 保存可跨节点使用的资源描述与授权引用；lazyd 管内容索引和本地缓存；StratoVirt 使用本次 attachment 提供的逻辑布局，不解析镜像 tag。
+Conch 保存可跨节点使用的资源描述与授权引用；lazyd 管内容索引和本地缓存；StratoVirt 使用本次 attachment 的区域布局和不透明来源标识，不解析镜像 tag、digest 或 cache key。
 
 可以按整 blob、chunk 或组合 artifact 缓存。若使用可映射文件，共享物理页还要求映射到同一实际文件页；两个相同 digest 的独立缓存文件不会自动共享 page cache。
 
@@ -88,9 +90,9 @@ handler 外置，不意味着外部进程能直接对 StratoVirt 的 HVA 执行�
 
 ### 我们先验证哪条？
 
-**先做外部 handler 的最小原型，并以内置 handler 为对照。** 理由是 StratoVirt 上游已经有 RAM 的外部 UFFD 交接机制，可评估复用；这不是已证明 pmem 可直接套用。权限、连接中断、事件代次、remap 完成通知和就绪条件都要补足。
+**先验证外部 handler，首版只落地一种新增 pmem 路径。** 理由是本次核查的 StratoVirt 上游已有 RAM 的外部 UFFD 交接机制，可评估复用；这不是已证明 pmem 可直接套用。内部方式先作设计或已有实验对照，只有遇到具体问题才补最小原型，不要求两套同时产品化。权限、连接中断、事件代次、remap 完成通知和就绪条件仍是必需边界。
 
-Conch 管 attachment 生命周期；lazyd 可增加独立于内容核心的 UFFD 适配模块；StratoVirt 管内存区域、接收已就绪文件范围、校验和完成映射。若外置方式明显扩大故障范围或协议复杂度，再选择内部 handler，不为复用而强行外置。
+Conch 管 attachment 生命周期；lazyd 可增加独立于内容核心的 UFFD 适配模块；StratoVirt 管内存区域、接收已就绪文件范围、校验和完成映射。若外置方式明显扩大故障范围或协议复杂度，再选择内部 handler，不为复用而强行外置。无论哪种位置，内容索引、下载、缓存和预取仍在数据源侧，不能把它们随 handler 搬进 VMM。
 
 VM2 仍有自己的地址和首次缺页。数据已缓存时不需再下载，但它仍需建立自己的映射。**共享内容不等于自动同步所有 VM 的页表。**
 
@@ -101,7 +103,7 @@ VM2 仍有自己的地址和首次缺页。数据已缓存时不需再下载，�
 <details>
 <summary>地址与协议细节：按需展开</summary>
 
-HVA 是 VMM 的宿主机虚拟地址，GPA 是 guest 物理地址。缺页地址要经过区域布局转换成内容偏移，不一定永远等于单一文件的 `fault_hva - base_hva`；组合设备或增量层可能需要额外索引。
+HVA 是 VMM 的宿主机虚拟地址，GPA 是 guest 物理地址。handler 根据区域布局把缺页地址转换成区域内偏移；数据源再将逻辑范围解析成内容文件/偏移。后一步不一定等于 `fault_hva - base_hva`，组合设备或增量层的内容索引留在数据源侧，VMM 不承担这类解析。
 
 UFFD FD 是缺页通知/处理句柄，缓存文件 FD 是数据访问句柄。它们可通过 SCM_RIGHTS 传递，但生命周期和权限不同。
 
@@ -131,7 +133,7 @@ Conch 只接收清楚的准备状态；内容服务负责数据正确性；Strat
 
 Nydus 的 prefault 是握手后异步枚举已缓存范围，不代表预测下载，也不保证启动前全部映射完。[SRC-NYDUS-007]
 
-建议 Conch 提供场景、截止时间和节点预算，StratoVirt/handler 提供访问或驻留反馈，lazyd 调度下载。可新增必要的协商字段，不因某个协议缺少访问流 ID 就永久放弃该信息。
+建议 Conch 提供场景、截止时间和节点预算，lazyd 调度下载。先使用 handler 已收到的事件和现有指标；只有测量证明必要时，才评估最小的 VMM 访问/驻留反馈接口。新增访问追踪框架不是首版前置，网络策略和预取算法不进入 StratoVirt。
 
 单次请求慢可能来自鉴权、连接或拥塞，不能据此无限扩大范围。当前需求优先，后台请求有大小和并发上限；启动前等待预取是单独策略，必须计入启动成本。
 
@@ -145,6 +147,8 @@ Nydus 的 prefault 是握手后异步枚举已缓存范围，不代表预测下�
 
 借鉴的是“历史内容不变，新写入进入私有状态”，不是直接选定 NBD、TCMU 或某个文件系统。Conch 管快照资源与设备布局；数据后端解释块覆盖和写层；StratoVirt 暴露设备并参与一致性屏障。
 
+整盘候选先利用已有块设备及外部后端作对照，不要求 StratoVirt 为选型新增一套 NBD/COW 引擎；若现有接入不足，先记录缺口和成本，再决定是否扩大范围。
+
 **验证：** 先读最高优先级历史块；区分继承与显式零；封存期间没有读空窗；新写入不污染其他 VM。详见[磁盘方案比较](../03-design-comparison/02-writable-upper-and-snapshot.md)。
 
 ## 7. 恢复运行内存：本地懒恢复是否足够？
@@ -153,9 +157,9 @@ Nydus 的 prefault 是握手后异步枚举已缓存范围，不代表预测下�
 
 [Firecracker 外部 handler 文档](https://github.com/firecracker-microvm/firecracker/blob/7699746649826d1dfcdde626b3131bac08f28e0d/docs/snapshotting/handling-page-faults-on-snapshot-resume.md)展示 UFFD FD/layout 交接和 COPY；[Cloud Hypervisor v53](https://github.com/cloud-hypervisor/cloud-hypervisor/releases/tag/v53.0)提供 snapshot/restore offload 和按需/后台恢复；[E2B faultPage](https://github.com/e2b-dev/infra/blob/cc7c574233ad98665a7c72a3d37b0af89ae79a71/packages/orchestrator/pkg/sandbox/uffd/userfaultfd/userfaultfd.go)体现页来源、COPY、重试和失败回调。[SRC-FC-002] [SRC-CH-001] [SRC-E2B-003]
 
-建议先复用上游恢复和增量索引，再评估把远端不可变快照范围交给 lazyd 通用内容核心。**可以同服务、同传输框架，但不能用镜像 ready bitmap 代替某台 VM 的 RAM 驻留/脏页状态。**
+建议先复用上游恢复和增量索引，再评估把远端不可变快照范围交给 lazyd 通用内容核心。**可以共用数据服务，但不以重构 StratoVirt 的统一 UFFD/迁移框架为前置，也不能用镜像 ready bitmap 代替某台 VM 的 RAM 驻留/脏页状态。**
 
-Conch 定位一致快照与父层，StratoVirt 管 RAM/设备恢复，handler 解析逻辑页来源并完成填页。COPY、memfd 写页或私有文件映射按上游实际 backend 选择。恢复后业务写入不能被后台重复填页覆盖。
+Conch 定位一致快照与父层，数据源的内存适配器复用索引解析逻辑页来源；StratoVirt 保留 RAM/设备恢复和 dirty tracking，handler 按既有恢复契约请求与完成填页。COPY、memfd 写页或私有文件映射按上游实际 backend 选择，不因 pmem 选型而重写 RAM 恢复。恢复后业务写入不能被后台重复填页覆盖。
 
 **验证：** 跨多层页查询、显式零、重复 fault、取消、脏页/WP/REMOVE、二次 checkpoint 和私有写入。详见[内存恢复](../03-design-comparison/03-memory-snapshot-restore.md)。
 
@@ -173,4 +177,4 @@ Conch 定位一致快照与父层，StratoVirt 管 RAM/设备恢复，handler �
 
 ## 现在可以决定什么？
 
-可以确定联合流程和正确性门槛；handler 位置、磁盘组合、协议/进程组织、预取策略仍按[实施路线](07-phased-roadmap.md)进行有顺序的验证。每个选择都记录接受条件和否决条件，结果出来后再冻结跨仓契约。
+可以确定联合流程、VMM 最小职责和正确性门槛；handler 位置、磁盘组合、协议/进程组织、预取策略仍按[实施路线](07-phased-roadmap.md)进行有顺序的验证。每个选择都记录接受条件和否决条件，首版只实现选定路径，再冻结其必要跨仓契约，不把所有候选扩展一并加入 StratoVirt。

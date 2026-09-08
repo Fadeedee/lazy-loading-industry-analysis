@@ -20,7 +20,7 @@
 
 外部 UFFD 是候选方案。若验证后采用，lazyd 的 UFFD adapter 接收 VMM 区域/句柄，定位资源范围并请求内容核心；涉及 mmap 修改 VMM 地址空间的动作仍由 VMM 完成。
 
-也可由 StratoVirt 内部处理 fault，lazyd 只接范围请求。选择依据是上游复用、错误域、权限和延迟，不是哪个仓改起来更自由。
+也可由 StratoVirt 内部处理 fault，lazyd 只接范围请求；镜像布局、快照父层内容索引和远端取数仍由数据源负责，不随 handler 移入 VMM。两者只在选型阶段比较，首版新增 pmem 路径只实现选定方案，边界见[StratoVirt 职责](05-stratovirt-responsibilities.md)。
 
 节点级共享缓存不要求所有 VM 共用一个无隔离 handler。session、worker 或独立进程可有不同故障域；不预先固定 binary 数量。
 
@@ -41,7 +41,7 @@
 
 ## 调度由三仓协作
 
-Conch 提供场景/节点预算，VMM 或外部 handler 提供访问反馈，lazyd 结合队列、远端耗时和缓存命中进行调度。新增访问流、优先级或 deadline 字段可以讨论，但必须定义兼容和授权。
+Conch 提供场景/节点预算，lazyd 结合 handler 已收到的事件、队列、远端耗时和缓存命中进行调度。先利用已有指标，只有测量证明需要时才补最小 VMM 反馈接口，不以新增访问追踪框架为前置。新增字段仍需定义兼容和授权，预取算法留在数据服务侧。
 
 固定缓存粒度与动态预取窗口是两个问题。bitmap 若采用固定 unit，不能随意改已有 header；这不意味着新设计永久绑定某个 unit 或 JSON 版本。
 

@@ -28,7 +28,7 @@ Conch 解析 checkpoint 的内存视图及兼容配置
   -> 恢复 CPU/设备状态后 resume
 ```
 
-第一次访问时，handler 从 HVA 定位**内存视图中的逻辑页**，索引决定从哪一层读取，内容服务供应所需字节，内存适配器按选定 backend 完成填充和唤醒。它不是简单地对每一层使用同一个文件 offset。
+第一次访问时，handler 从 HVA 定位**内存视图中的逻辑页**，数据源的内存适配器通过索引决定从哪一层读取，内容服务供应所需字节，再按上游 backend 契约完成填充和唤醒。VMM 不新增快照父层内容索引；它不是简单地对每一层使用同一个文件 offset。
 
 内存可写。填充方式可以是 COPY、私有文件映射或明确的 memfd/COW 路径，但必须证明 VM 写入不污染共享快照、再次 checkpoint 能正确识别脏页。
 
@@ -42,9 +42,9 @@ Conch #155 与 StratoVirt #2017 提供了增量内存视图、外部处理和 di
 
 ## 与 rootfs、磁盘恢复怎样配合
 
-它们可以共用内容服务、认证、缓存、并发和预取预算，甚至使用带类型的公共协议；但 RAM 的写隔离/dirty tracking 不能等同于文件内容的 cache ready。
+它们可以共用内容服务、认证、缓存、并发和预取预算，但这不要求统一 VMM 协议或先重构 UFFD/迁移框架。RAM 的写隔离/dirty tracking 不能等同于文件内容的 cache ready。
 
-Conch 统一等待本次恢复实际需要的资源达到可服务状态，StratoVirt 保证 CPU/设备状态恢复顺序正确。handler 在内部还是外部，是需要连同 pmem、RAM 一起验证的选择，不在这里先固定两套进程。
+Conch 统一等待本次恢复实际需要的资源达到可服务状态，StratoVirt 保留已有 RAM backend、dirty tracking 和 CPU/设备状态恢复顺序，只补实际缺失的接入与失败处理。新增 pmem handler 的选型不要求替换已有 RAM handler；验证两者并存，而不是先将其合成一套恢复引擎。
 
 ## 验证重点
 
