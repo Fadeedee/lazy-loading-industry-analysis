@@ -1,0 +1,93 @@
+[
+  {
+    "source": "target-responsibilities.html",
+    "source_sha256": "b50548ac3463c24b73ccff484001f2c45d32356bbbed13bf57eb3988f6e0c9ee",
+    "preview": "overall-architecture.png",
+    "preview_sha256": "53423bd3181e849812c02e50c810a5561444103df421100f83c9e6bb1ceb9157",
+    "bounds": {
+      "x": 248.5,
+      "y": 98,
+      "width": 1103,
+      "height": 661.796875
+    },
+    "method": "Playwright screenshot of delivered SVG element; light theme; no HTML file modification"
+  },
+  {
+    "source": "overall-prepare.html",
+    "source_sha256": "a2db4603432f2a4d5878f58e4be0c329d1cf944653ba2232be616c60442d4387",
+    "preview": "overall-prepare.png",
+    "preview_sha256": "cdd9ced5ae8dbd3bd4092e7436c3639f0184554b891c96e45e73edfee0a77789",
+    "bounds": {
+      "x": 47,
+      "y": 98,
+      "width": 1506,
+      "height": 753
+    },
+    "method": "Playwright screenshot of delivered SVG element; light theme; no HTML file modification"
+  },
+  {
+    "source": "overall-start.html",
+    "source_sha256": "4d89c037a72428a519dc173c86774054380cce3a0cd092747b32716b200ad20c",
+    "preview": "overall-start.png",
+    "preview_sha256": "6b4cc27a6c1ada3ca92d85393d4d9ca092643d5252bd616247da03166f6c980f",
+    "bounds": {
+      "x": 47,
+      "y": 98,
+      "width": 1506,
+      "height": 753
+    },
+    "method": "Playwright screenshot of delivered SVG element; light theme; no HTML file modification"
+  },
+  {
+    "source": "overall-fault.html",
+    "source_sha256": "20164bb41f87d1922d3f7943c1718e0a1d5e810d6d48870d876182e48c8ed197",
+    "preview": "overall-fault.png",
+    "preview_sha256": "e0a9f20209aa93d5142ef0c0df1011ce3107c7d2f6197785fb2752367bc98c57",
+    "bounds": {
+      "x": 66.5,
+      "y": 98,
+      "width": 1467,
+      "height": 775.8125
+    },
+    "method": "Playwright screenshot of delivered SVG element; light theme; no HTML file modification"
+  },
+  {
+    "source": "overall-sharing.html",
+    "source_sha256": "b14d955f3f33e4463ea4a360b0cc1bedc41542ea720d8125cafd6c6947d25fea",
+    "preview": "overall-sharing.png",
+    "preview_sha256": "aee9b91276a4fed6e9dfd3291204029c092fd5ed80d1210f7c55f3effc8e045e",
+    "bounds": {
+      "x": 47,
+      "y": 98,
+      "width": 1506,
+      "height": 709.546875
+    },
+    "method": "Playwright screenshot of delivered SVG element; light theme; no HTML file modification"
+  },
+  {
+    "source": "overall-close.html",
+    "source_sha256": "1e3e1437c2d645188d6dad21cbb403ebe81477aecda81accd7f07bb16988179f",
+    "preview": "overall-close.png",
+    "preview_sha256": "5227a38a869af1f748d2ae07ec9c56a86487bb9fd23ebcff064af4c788c36dde",
+    "bounds": {
+      "x": 47,
+      "y": 98,
+      "width": 1506,
+      "height": 753
+    },
+    "method": "Playwright screenshot of delivered SVG element; light theme; no HTML file modification"
+  },
+  {
+    "source": "overall-restore.html",
+    "source_sha256": "ec81adfc537c0a6cf3b2b0e0ba8dbf8c943b07a5c504836ffa2e01e33156bbec",
+    "preview": "overall-restore.png",
+    "preview_sha256": "fe25b8924e431e49a89869519adf4b32a4fb5f193b5303f9df171220ca72f5c8",
+    "bounds": {
+      "x": 66.5,
+      "y": 98,
+      "width": 1467,
+      "height": 775.8125
+    },
+    "method": "Playwright screenshot of delivered SVG element; light theme; no HTML file modification"
+  }
+]

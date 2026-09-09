@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 读取位置属于什么对象 | Nydus 逻辑块到 blob/chunk；SOCI 文件位置与压缩 span；E2B 磁盘 overlay 与 RAM PageReader | 内容、逻辑视图、运行会话分别表达；一个 offset 不能同时代表三者 |
 | 两个请求命中同一缺失内容 | Nydus ChunkMap/RangeMap 与 BlobStateMap 的 pending/ready 协调 | 需要共享任务及失败清理，而不只是一个“下载过”的 bitmap |
-| 网络取完是否就能交付 | Nydus 条件化校验；lazyd 已有 cache sync 后 ready 的顺序 | 长度、局部校验、持久化、可映射分别承诺；通知完成不能提前 |
+| 网络取完是否就能交付 | Nydus 条件化校验；掉电提交顺序需要另查实际写入/屏障 | 长度、局部校验、持久化、可映射分别承诺；不能由校验接口推定持久化 |
 | 后台任务怎样与前台并存 | eStargz 工作集预取；QEMU 前台/后台页领取 | 调度预算可共用，但预测下载与恢复页安装状态不能混用 |
 | 来源服务什么时候算就绪 | E2B NBDProvider 的 ready 结果；Firecracker 外部 handler 的失败警告 | 建立连接不等于可供数；Conch 必须知道来源失败，VMM 必须能结束等待 |
 | 关闭后能否删除数据 | E2B 设备与私有 cache 的关闭顺序；Kata mount 所有权；独立项目的 lease 讨论 | 关闭当前会话不等于回收公共内容；VMM 已有 FD/映射仍要受保护 |
@@ -18,6 +18,8 @@
 资料入口：[Nydus 状态协调](../02-products/01-nydus-v2/02-cache-snapshot-lifecycle.md)、[SOCI](../02-products/04-soci/01-data-path.md)、[eStargz](../02-products/03-stargz/01-data-path.md)、[QEMU](../02-products/09-qemu/01-data-path.md)、[E2B 关闭边界](../02-products/12-e2b-and-firecracker-stacks/02-cache-snapshot-lifecycle.md)。每项事实沿用各自来源版本，不把本表解释为所有产品都已实现同一套服务。
 
 ## 例一：bitmap 之外还需要任务状态
+
+bitmap 可记录已就绪范围；在途任务还需要表达领取、等待、取消和完成结果。具体布局与提交策略见[核心选型](../04-conch-design-reference/09-core-design-selection.md)。
 
 [Nydus 的状态接口](https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/storage/src/cache/state/mod.rs)区分 ready 查询、领取 pending、完成/清理和范围等待。[BlobStateMap 实现](https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/storage/src/cache/state/blob_state_map.rs)用独立的在途表和条件变量协调同一内容单元，等待后重新检查 ready；清 pending 可以结束等待，但不一定代表数据成功。[SRC-NYDUS-009] [SRC-NYDUS-010]
 

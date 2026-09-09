@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "停止：先结束使用，再释放保护",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [
+      1040,
+      520
+    ]
+  },
+  "participants": [
+    {
+      "id": "close-owner",
+      "label": "Conch",
+      "sublabel": "沙箱生命周期",
+      "type": "backend"
+    },
+    {
+      "id": "closing-vmm",
+      "label": "StratoVirt",
+      "sublabel": "访问与映射 owner",
+      "type": "backend"
+    },
+    {
+      "id": "closing-session",
+      "label": "lazyd 会话",
+      "sublabel": "请求与运行引用",
+      "type": "backend"
+    },
+    {
+      "id": "cache-owner",
+      "label": "lazyd 内容核心",
+      "sublabel": "共享文件与取数",
+      "type": "backend"
+    },
+    {
+      "id": "release-kernel",
+      "label": "宿主机内核",
+      "sublabel": "映射与文件",
+      "type": "backend"
+    }
+  ],
+  "messages": [
+    {
+      "id": "request-stop",
+      "from": "close-owner",
+      "to": "closing-vmm",
+      "y": 160,
+      "label": "停止受影响 VM"
+    },
+    {
+      "id": "revoke-requests",
+      "from": "close-owner",
+      "to": "closing-session",
+      "y": 190,
+      "label": "禁止本会话新请求"
+    },
+    {
+      "id": "cancel-waiter",
+      "from": "closing-session",
+      "to": "cache-owner",
+      "y": 220,
+      "label": "移除本会话等待者"
+    },
+    {
+      "id": "preserve-others",
+      "from": "cache-owner",
+      "to": "closing-session",
+      "y": 250,
+      "label": "保留其他 VM 所需任务",
+      "variant": "return"
+    },
+    {
+      "id": "reject-late",
+      "from": "closing-vmm",
+      "to": "closing-session",
+      "y": 280,
+      "label": "拒绝过期完成消息"
+    },
+    {
+      "id": "close-mapping",
+      "from": "closing-vmm",
+      "to": "release-kernel",
+      "y": 310,
+      "label": "结束访问、解除映射与 FD"
+    },
+    {
+      "id": "vmm-stopped",
+      "from": "closing-vmm",
+      "to": "close-owner",
+      "y": 340,
+      "label": "确认运行资源已结束",
+      "variant": "return"
+    },
+    {
+      "id": "release-attachment",
+      "from": "close-owner",
+      "to": "closing-session",
+      "y": 370,
+      "label": "释放运行使用关系"
+    },
+    {
+      "id": "release-pin",
+      "from": "closing-session",
+      "to": "cache-owner",
+      "y": 400,
+      "label": "移除本会话保护"
+    },
+    {
+      "id": "consider-gc",
+      "from": "cache-owner",
+      "to": "release-kernel",
+      "y": 430,
+      "label": "无其他保护才允许淘汰"
+    }
+  ]
+}

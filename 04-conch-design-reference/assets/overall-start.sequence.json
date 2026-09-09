@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "启动：先就绪，再允许访问",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [
+      1040,
+      520
+    ]
+  },
+  "participants": [
+    {
+      "id": "boot-owner",
+      "label": "Conch",
+      "sublabel": "管理运行操作",
+      "type": "backend"
+    },
+    {
+      "id": "fault-service",
+      "label": "lazyd",
+      "sublabel": "会话与缺页适配",
+      "type": "backend"
+    },
+    {
+      "id": "vmm-owner",
+      "label": "StratoVirt",
+      "sublabel": "设备与地址区域",
+      "type": "backend"
+    },
+    {
+      "id": "host-kernel",
+      "label": "宿主机内核",
+      "sublabel": "KVM 与 UFFD",
+      "type": "backend"
+    },
+    {
+      "id": "guest-agent",
+      "label": "guestd",
+      "sublabel": "Conch 的虚机内代理",
+      "type": "backend"
+    }
+  ],
+  "messages": [
+    {
+      "id": "create-attachment",
+      "from": "boot-owner",
+      "to": "fault-service",
+      "y": 160,
+      "label": "建立运行会话与内容保护"
+    },
+    {
+      "id": "return-attachment",
+      "from": "fault-service",
+      "to": "boot-owner",
+      "y": 190,
+      "label": "会话可接入",
+      "variant": "return"
+    },
+    {
+      "id": "launch-vmm",
+      "from": "boot-owner",
+      "to": "vmm-owner",
+      "y": 220,
+      "label": "启动：资源、布局、会话"
+    },
+    {
+      "id": "reserve-region",
+      "from": "vmm-owner",
+      "to": "host-kernel",
+      "y": 250,
+      "label": "匿名映射、区域注册"
+    },
+    {
+      "id": "region-handle",
+      "from": "host-kernel",
+      "to": "vmm-owner",
+      "y": 280,
+      "label": "HVA、memslot、UFFD FD",
+      "variant": "return"
+    },
+    {
+      "id": "handoff-uffd",
+      "from": "vmm-owner",
+      "to": "fault-service",
+      "y": 310,
+      "label": "SCM_RIGHTS：UFFD 与布局",
+      "variant": "security"
+    },
+    {
+      "id": "handler-ack",
+      "from": "fault-service",
+      "to": "vmm-owner",
+      "y": 340,
+      "label": "区域与完成通道已就绪",
+      "variant": "return"
+    },
+    {
+      "id": "allow-access",
+      "from": "vmm-owner",
+      "to": "host-kernel",
+      "y": 370,
+      "label": "允许设备与 vCPU 访问",
+      "variant": "emphasis"
+    },
+    {
+      "id": "guest-boot",
+      "from": "host-kernel",
+      "to": "guest-agent",
+      "y": 400,
+      "label": "启动或继续 guest"
+    },
+    {
+      "id": "guest-mount",
+      "from": "guest-agent",
+      "to": "boot-owner",
+      "y": 430,
+      "label": "稳定匹配、DAX 挂载后上报",
+      "variant": "return"
+    }
+  ]
+}

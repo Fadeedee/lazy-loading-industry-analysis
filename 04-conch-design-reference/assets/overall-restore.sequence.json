@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "快照恢复：先固定视图，再并行供数",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [
+      1040,
+      550
+    ]
+  },
+  "participants": [
+    {
+      "id": "restore-owner",
+      "label": "Conch",
+      "sublabel": "恢复操作 owner",
+      "type": "backend"
+    },
+    {
+      "id": "snapshot-index",
+      "label": "快照索引",
+      "sublabel": "一致代次与依赖",
+      "type": "database"
+    },
+    {
+      "id": "restore-service",
+      "label": "lazyd / 数据源",
+      "sublabel": "不同类型适配",
+      "type": "backend"
+    },
+    {
+      "id": "restore-vmm",
+      "label": "StratoVirt",
+      "sublabel": "复用恢复机制",
+      "type": "backend"
+    },
+    {
+      "id": "restored-guest",
+      "label": "Guest",
+      "sublabel": "私有运行状态",
+      "type": "backend"
+    }
+  ],
+  "messages": [
+    {
+      "id": "resolve-checkpoint",
+      "from": "restore-owner",
+      "to": "snapshot-index",
+      "y": 160,
+      "label": "解析完整依赖与代次"
+    },
+    {
+      "id": "checkpoint-resources",
+      "from": "snapshot-index",
+      "to": "restore-owner",
+      "y": 190,
+      "label": "镜像、磁盘、RAM、设备状态",
+      "variant": "return"
+    },
+    {
+      "id": "prepare-all-sources",
+      "from": "restore-owner",
+      "to": "restore-service",
+      "y": 220,
+      "label": "并行准备来源与私有写层"
+    },
+    {
+      "id": "source-ready",
+      "from": "restore-service",
+      "to": "restore-owner",
+      "y": 250,
+      "label": "必要索引与供数入口就绪",
+      "variant": "return"
+    },
+    {
+      "id": "restore-layout",
+      "from": "restore-owner",
+      "to": "restore-vmm",
+      "y": 280,
+      "label": "布局、来源绑定与设备状态"
+    },
+    {
+      "id": "restore-source-binding",
+      "from": "restore-vmm",
+      "to": "restore-service",
+      "y": 310,
+      "label": "接入各自访问处理路径"
+    },
+    {
+      "id": "restore-ready-barrier",
+      "from": "restore-service",
+      "to": "restore-vmm",
+      "y": 340,
+      "label": "最早访问前完成就绪",
+      "variant": "return"
+    },
+    {
+      "id": "resume-state",
+      "from": "restore-vmm",
+      "to": "restored-guest",
+      "y": 370,
+      "label": "恢复设备 / CPU 并继续运行"
+    },
+    {
+      "id": "snapshot-miss",
+      "from": "restore-vmm",
+      "to": "restore-service",
+      "y": 400,
+      "label": "按类型请求缺失页或块"
+    },
+    {
+      "id": "snapshot-complete",
+      "from": "restore-service",
+      "to": "restore-vmm",
+      "y": 430,
+      "label": "解析父层，按各路径完成",
+      "variant": "return"
+    },
+    {
+      "id": "restore-private-writes",
+      "from": "restored-guest",
+      "to": "restore-vmm",
+      "y": 460,
+      "label": "新写入不修改共享历史"
+    }
+  ]
+}

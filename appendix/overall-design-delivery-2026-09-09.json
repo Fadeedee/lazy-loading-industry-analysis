@@ -1,0 +1,164 @@
+[
+  {
+    "name": "overall-prepare",
+    "schemaVersion": 1,
+    "ok": true,
+    "command": "deliver",
+    "type": "sequence",
+    "input": "/root/virtiolazyd/lazy-loading-industry-analysis/04-conch-design-reference/assets/overall-prepare.sequence.json",
+    "output": "/root/virtiolazyd/lazy-loading-industry-analysis/04-conch-design-reference/assets/overall-prepare.html",
+    "specification": {
+      "sha256": "af022a1a6c3903f2300fc8f4137da97042f5bbf6af8f3b5500862d74aa143b9d",
+      "bytes": 2788
+    },
+    "artifact": {
+      "sha256": "a2db4603432f2a4d5878f58e4be0c329d1cf944653ba2232be616c60442d4387",
+      "bytes": 708383
+    },
+    "validation": {
+      "checksPassed": 9,
+      "checkCount": 9,
+      "compositionProfile": "showcase",
+      "compositionStatus": "pass",
+      "errors": 0,
+      "warnings": 0
+    },
+    "browser_receipt": "../04-conch-design-reference/assets/overall-prepare.visual-check.json",
+    "browser_evidence": "pass"
+  },
+  {
+    "name": "overall-start",
+    "schemaVersion": 1,
+    "ok": true,
+    "command": "deliver",
+    "type": "sequence",
+    "input": "/root/virtiolazyd/lazy-loading-industry-analysis/04-conch-design-reference/assets/overall-start.sequence.json",
+    "output": "/root/virtiolazyd/lazy-loading-industry-analysis/04-conch-design-reference/assets/overall-start.html",
+    "specification": {
+      "sha256": "39c84dddb0ce188b6b022c3622491c38e9f47ca16f6a931723a02647dc7014a1",
+      "bytes": 2707
+    },
+    "artifact": {
+      "sha256": "4d89c037a72428a519dc173c86774054380cce3a0cd092747b32716b200ad20c",
+      "bytes": 708075
+    },
+    "validation": {
+      "checksPassed": 9,
+      "checkCount": 9,
+      "compositionProfile": "showcase",
+      "compositionStatus": "pass",
+      "errors": 0,
+      "warnings": 0
+    },
+    "browser_receipt": "../04-conch-design-reference/assets/overall-start.visual-check.json",
+    "browser_evidence": "pass"
+  },
+  {
+    "name": "overall-fault",
+    "schemaVersion": 1,
+    "ok": true,
+    "command": "deliver",
+    "type": "sequence",
+    "input": "/root/virtiolazyd/lazy-loading-industry-analysis/04-conch-design-reference/assets/overall-fault.sequence.json",
+    "output": "/root/virtiolazyd/lazy-loading-industry-analysis/04-conch-design-reference/assets/overall-fault.html",
+    "specification": {
+      "sha256": "6f2093ad3293abc7a5e9271f14997ca8cee2894dd73ed65bcd313713b3c2163b",
+      "bytes": 3037
+    },
+    "artifact": {
+      "sha256": "20164bb41f87d1922d3f7943c1718e0a1d5e810d6d48870d876182e48c8ed197",
+      "bytes": 710412
+    },
+    "validation": {
+      "checksPassed": 9,
+      "checkCount": 9,
+      "compositionProfile": "showcase",
+      "compositionStatus": "pass",
+      "errors": 0,
+      "warnings": 0
+    },
+    "browser_receipt": "../04-conch-design-reference/assets/overall-fault.visual-check.json",
+    "browser_evidence": "pass"
+  },
+  {
+    "name": "overall-sharing",
+    "schemaVersion": 1,
+    "ok": true,
+    "command": "deliver",
+    "type": "sequence",
+    "input": "/root/virtiolazyd/lazy-loading-industry-analysis/04-conch-design-reference/assets/overall-sharing.sequence.json",
+    "output": "/root/virtiolazyd/lazy-loading-industry-analysis/04-conch-design-reference/assets/overall-sharing.html",
+    "specification": {
+      "sha256": "653d1f8464e03f584dd3d38b0f7f423abfbb0c4f0a5ee9844145d6199b6c9a52",
+      "bytes": 2472
+    },
+    "artifact": {
+      "sha256": "b14d955f3f33e4463ea4a360b0cc1bedc41542ea720d8125cafd6c6947d25fea",
+      "bytes": 706646
+    },
+    "validation": {
+      "checksPassed": 9,
+      "checkCount": 9,
+      "compositionProfile": "showcase",
+      "compositionStatus": "pass",
+      "errors": 0,
+      "warnings": 0
+    },
+    "browser_receipt": "../04-conch-design-reference/assets/overall-sharing.visual-check.json",
+    "browser_evidence": "pass"
+  },
+  {
+    "name": "overall-close",
+    "schemaVersion": 1,
+    "ok": true,
+    "command": "deliver",
+    "type": "sequence",
+    "input": "/root/virtiolazyd/lazy-loading-industry-analysis/04-conch-design-reference/assets/overall-close.sequence.json",
+    "output": "/root/virtiolazyd/lazy-loading-industry-analysis/04-conch-design-reference/assets/overall-close.html",
+    "specification": {
+      "sha256": "d2dde70dc22232ba8cb00491af1f1d06ff78f8084160f9f54dfde9a63332816f",
+      "bytes": 2652
+    },
+    "artifact": {
+      "sha256": "1e3e1437c2d645188d6dad21cbb403ebe81477aecda81accd7f07bb16988179f",
+      "bytes": 707479
+    },
+    "validation": {
+      "checksPassed": 9,
+      "checkCount": 9,
+      "compositionProfile": "showcase",
+      "compositionStatus": "pass",
+      "errors": 0,
+      "warnings": 0
+    },
+    "browser_receipt": "../04-conch-design-reference/assets/overall-close.visual-check.json",
+    "browser_evidence": "pass"
+  },
+  {
+    "name": "overall-restore",
+    "schemaVersion": 1,
+    "ok": true,
+    "command": "deliver",
+    "type": "sequence",
+    "input": "/root/virtiolazyd/lazy-loading-industry-analysis/04-conch-design-reference/assets/overall-restore.sequence.json",
+    "output": "/root/virtiolazyd/lazy-loading-industry-analysis/04-conch-design-reference/assets/overall-restore.html",
+    "specification": {
+      "sha256": "77744a38600f1d8700d86d834173512af71f9ac180eb6868fb91a02b0a10a6d0",
+      "bytes": 2995
+    },
+    "artifact": {
+      "sha256": "ec81adfc537c0a6cf3b2b0e0ba8dbf8c943b07a5c504836ffa2e01e33156bbec",
+      "bytes": 708550
+    },
+    "validation": {
+      "checksPassed": 9,
+      "checkCount": 9,
+      "compositionProfile": "showcase",
+      "compositionStatus": "pass",
+      "errors": 0,
+      "warnings": 0
+    },
+    "browser_receipt": "../04-conch-design-reference/assets/overall-restore.visual-check.json",
+    "browser_evidence": "pass"
+  }
+]

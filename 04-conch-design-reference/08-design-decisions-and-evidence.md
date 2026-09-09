@@ -6,6 +6,8 @@
 
 ## 先看设计主线
 
+本页解释设计问题、参考实现和适用差异；候选状态及实验步骤统一见[核心选型与验证计划](09-core-design-selection.md)。
+
 **准备镜像或快照 → 创建或恢复沙箱 → 按需访问 → 保存快照 → 停止与回收。**
 
 我们希望业务更早可用，不是只让 pull 更快。以下八项分别说明建议、替代方案、证据及验证；接口名和进程数尚未冻结。
@@ -96,7 +98,7 @@ handler 外置，不意味着外部进程能直接对 StratoVirt 的 HVA 执行�
 
 ### 我们先验证哪条？
 
-**先验证外部 handler，首版只落地一种新增 pmem 路径。** 理由是本次核查的 StratoVirt 上游已有 RAM 的外部 UFFD 交接机制，可评估复用；这不是已证明 pmem 可直接套用。内部方式先作设计或已有实验对照，只有遇到具体问题才补最小原型，不要求两套同时产品化。权限、连接中断、事件代次、remap 完成通知和就绪条件仍是必需边界。
+**内部与外部 handler 尚未选定，产品只落地一种新增 pmem 路径。** 已有 RAM 外部交接和自有内部实验分别是可复用资产，不是任一候选胜出的证据。按同一标准比较代码、协议、权限、连接中断、事件代次、完成通知与关闭成本；静态审计无法回答的问题才做原型。具体执行见[选型计划 H1/H2 与 E4](09-core-design-selection.md)。
 
 Conch 管 attachment 生命周期；lazyd 可增加独立于内容核心的 UFFD 适配模块；StratoVirt 管内存区域、接收已就绪文件范围、校验和完成映射。若外置方式明显扩大故障范围或协议复杂度，再选择内部 handler，不为复用而强行外置。无论哪种位置，内容索引、下载、缓存和预取仍在数据源侧，不能把它们随 handler 搬进 VMM。
 
@@ -123,11 +125,13 @@ UFFD FD 是缺页通知/处理句柄，缓存文件 FD 是数据访问句柄。�
 
 建议把临时下载、完成校验、当前可读、可持久复用区分清楚。如果 ready 记录用于重启后跳过下载，它必须晚于相应数据持久化。
 
-[Nydus validate_chunk_data](https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/storage/src/cache/mod.rs)检查长度并按配置/格式决定校验；CRC 不等于密码学摘要。[lazyd 样本](https://github.com/Fadeedee/lazyd/blob/751d647fb37fa2e01f6fb1784003e8b26aa00244/src/instance.rs)已有先 cache sync、再 bitmap ready/sync 的顺序。这些分别是校验和持久化证据，不能混为一谈。[SRC-NYDUS-008] [SRC-LAZYD-001]
+[Nydus validate_chunk_data](https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/storage/src/cache/mod.rs)检查长度并按配置/格式决定校验；CRC 不等于密码学摘要。这是外部校验机制证据，不证明我们的持久化顺序。[SRC-NYDUS-008]
+
+[lazyd 样本](https://github.com/Fadeedee/lazyd/blob/751d647fb37fa2e01f6fb1784003e8b26aa00244/src/instance.rs)已有先 cache sync、再 bitmap ready/sync 的顺序，可作为逐任务持久提交的试验基线。[SRC-LAZYD-001]
 
 可选持久 bitmap，也可使用原子发布的分块文件或日志索引。选择根据同步成本、并发、掉电恢复和格式兼容决定，不先固定 bitmap 格式。SEEK_DATA/HOLE 只能发现明显洞；任意 range 的强校验需要可信局部摘要等依据。
 
-实施时先保留已有 sparse/bitmap，明确取数中、待持久化、ready 已提交和失败隔离的区别；外发只读 FD，保护仍被映射的文件。清 bitmap 不会撤销 guest 已有映射，因此损坏不能靠原地覆盖或截断修复。换缓存格式与批量同步属于有证据后再做的优化，不能代替这些基础边界。
+单文件索引与不可变 chunk 布局，以及逐任务与分组提交，都参加首版选型，不预设保留旧格式。共同要求是区分取数中、待持久化、ready 已提交和失败隔离；外发只读 FD，保护仍被映射的文件。清 ready 记录不会撤销 guest 已有映射，因此损坏不能靠原地覆盖或截断修复。比较与故障注入见[选型计划 S1/S2、P1/P2/P3 和 E2](09-core-design-selection.md)。
 
 Conch 只接收清楚的准备状态；内容服务负责数据正确性；StratoVirt 不映射未经承诺的缺失范围。可批量同步，但不能让持久 ready 领先数据。
 
@@ -193,4 +197,4 @@ Conch 定位一致快照与父层，数据源的内存适配器复用索引解�
 
 ## 现在可以决定什么？
 
-可以确定 pmem 主线、独立写层、联合流程、lazyd 基础改造和 VMM 最小职责。handler 位置、具体布局/协议/进程组织及预取策略按[实施路线](07-phased-roadmap.md)验证，快照来源分阶段接入。出现明确阻碍再重新评估路线，不把所有备选累加成首版功能；选定接口需有跨仓测试，但不提前冻结尚无依据的全部 ABI。
+可以确定 pmem 范围、独立写层、联合流程的正确性要求和 VMM 最小职责。不能据此宣称 lazyd 的缓存、提交和任务模型已经定案。未定项统一登记在[核心设计选型与验证计划](09-core-design-selection.md)，本页负责证据解释，不另立结论。选型之后再按[实施路线](07-phased-roadmap.md)落地，不把全部备选累加成产品功能；快照来源分阶段接入。

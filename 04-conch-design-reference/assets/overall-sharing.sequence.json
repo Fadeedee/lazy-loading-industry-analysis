@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "多 VM：共享任务，独立映射",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [
+      1040,
+      490
+    ]
+  },
+  "participants": [
+    {
+      "id": "consumer-one",
+      "label": "VM1 会话",
+      "sublabel": "本次等待可取消",
+      "type": "backend"
+    },
+    {
+      "id": "consumer-two",
+      "label": "VM2 会话",
+      "sublabel": "独立运行代次",
+      "type": "backend"
+    },
+    {
+      "id": "task-owner",
+      "label": "lazyd 内容核心",
+      "sublabel": "同内容任务与 ready",
+      "type": "backend"
+    },
+    {
+      "id": "source-worker",
+      "label": "取数 worker",
+      "sublabel": "有界来源与写盘",
+      "type": "backend"
+    },
+    {
+      "id": "second-vmm",
+      "label": "StratoVirt VM2",
+      "sublabel": "自己的地址映射",
+      "type": "backend"
+    }
+  ],
+  "messages": [
+    {
+      "id": "first-demand",
+      "from": "consumer-one",
+      "to": "task-owner",
+      "y": 160,
+      "label": "需要范围 R"
+    },
+    {
+      "id": "claim-task",
+      "from": "task-owner",
+      "to": "source-worker",
+      "y": 190,
+      "label": "原子登记并启动任务"
+    },
+    {
+      "id": "second-demand",
+      "from": "consumer-two",
+      "to": "task-owner",
+      "y": 220,
+      "label": "也需要范围 R"
+    },
+    {
+      "id": "join-task",
+      "from": "task-owner",
+      "to": "consumer-two",
+      "y": 250,
+      "label": "加入现有任务等待",
+      "variant": "return"
+    },
+    {
+      "id": "cancel-one",
+      "from": "consumer-one",
+      "to": "task-owner",
+      "y": 280,
+      "label": "仅取消 VM1 等待"
+    },
+    {
+      "id": "shared-ready",
+      "from": "source-worker",
+      "to": "task-owner",
+      "y": 310,
+      "label": "R 已持久 ready",
+      "variant": "return"
+    },
+    {
+      "id": "notify-two",
+      "from": "task-owner",
+      "to": "consumer-two",
+      "y": 340,
+      "label": "通知仍有效的 VM2",
+      "variant": "return"
+    },
+    {
+      "id": "deliver-two",
+      "from": "consumer-two",
+      "to": "second-vmm",
+      "y": 370,
+      "label": "交付受保护 FD 与范围"
+    },
+    {
+      "id": "map-two",
+      "from": "second-vmm",
+      "to": "consumer-two",
+      "y": 400,
+      "label": "映射并完成自己的等待",
+      "variant": "return"
+    }
+  ]
+}

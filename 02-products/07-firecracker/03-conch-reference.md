@@ -26,7 +26,7 @@ Firecracker 文档对 handler 失效后 VM 可能挂起的提醒，是设计失�
 
 ## 选择与差异
 
-pmem 主线先验证外部 UFFD 的适用性，但外部 handler 不等于必须新增 binary，也不要求合并 RAM/pmem 状态机。Issue #5740 的文件 FD/remap 思路另属提案，不能用已有 RAM 恢复文档证明正式 pmem 已支持远端按需；状态以已登记版本为限。
+外部 UFFD 是候选而不是已选方向，与内部方案的比较见[核心选型计划](../../04-conch-design-reference/09-core-design-selection.md)。外部 handler 不等于必须新增 binary，也不要求合并 RAM/pmem 状态机。Issue #5740 的文件 FD/remap 思路另属提案，不能用已有 RAM 恢复文档证明正式 pmem 已支持远端按需；状态以已登记版本为限。
 
 ## 如何验证
 

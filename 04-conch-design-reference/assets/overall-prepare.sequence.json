@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "内容准备：只取必需资产",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [
+      1040,
+      520
+    ]
+  },
+  "participants": [
+    {
+      "id": "prepare-owner",
+      "type": "backend",
+      "label": "Conch",
+      "sublabel": "准备操作 owner"
+    },
+    {
+      "id": "oci-source",
+      "type": "cloud",
+      "label": "Registry",
+      "sublabel": "镜像来源"
+    },
+    {
+      "id": "content-service",
+      "type": "backend",
+      "label": "lazyd",
+      "sublabel": "共享内容服务"
+    },
+    {
+      "id": "local-cache",
+      "type": "database",
+      "label": "内容缓存",
+      "sublabel": "sparse 与 ready"
+    },
+    {
+      "id": "native-store",
+      "type": "database",
+      "label": "Conch Store",
+      "sublabel": "持久资源引用"
+    }
+  ],
+  "messages": [
+    {
+      "id": "read-descriptors",
+      "from": "prepare-owner",
+      "to": "oci-source",
+      "y": 160,
+      "label": "读取镜像元数据"
+    },
+    {
+      "id": "return-descriptors",
+      "from": "oci-source",
+      "to": "prepare-owner",
+      "y": 190,
+      "label": "组件与内容描述",
+      "variant": "return"
+    },
+    {
+      "id": "pull-boot-assets",
+      "from": "prepare-owner",
+      "to": "oci-source",
+      "y": 220,
+      "label": "下载必需启动资产"
+    },
+    {
+      "id": "boot-assets-ready",
+      "from": "oci-source",
+      "to": "prepare-owner",
+      "y": 250,
+      "label": "kernel/initrd 就绪",
+      "variant": "return"
+    },
+    {
+      "id": "prepare-content",
+      "from": "prepare-owner",
+      "to": "content-service",
+      "y": 280,
+      "label": "内容描述、来源授权与准备请求",
+      "variant": "security"
+    },
+    {
+      "id": "open-shared-cache",
+      "from": "content-service",
+      "to": "local-cache",
+      "y": 310,
+      "label": "复用或创建缓存"
+    },
+    {
+      "id": "read-ready-state",
+      "from": "local-cache",
+      "to": "content-service",
+      "y": 340,
+      "label": "恢复可信 ready",
+      "variant": "return"
+    },
+    {
+      "id": "prepared-content",
+      "from": "content-service",
+      "to": "prepare-owner",
+      "y": 370,
+      "label": "可按需服务的内容结果",
+      "variant": "return"
+    },
+    {
+      "id": "publish-resource",
+      "from": "prepare-owner",
+      "to": "native-store",
+      "y": 400,
+      "label": "整组成功后发布资源与引用",
+      "variant": "emphasis"
+    },
+    {
+      "id": "published-reference",
+      "from": "native-store",
+      "to": "prepare-owner",
+      "y": 430,
+      "label": "可重建的准备记录",
+      "variant": "return"
+    }
+  ]
+}

@@ -17,7 +17,7 @@
 | 项目 | 可考虑的改动 |
 | --- | --- |
 | Conch | 分开登记共享内容与本次 attachment，传递授权、运行代次和失败回调；重复准备不重建其他 VM 正在用的对象。 |
-| StratoVirt | 先验证外部 UFFD 复用，内部 handler 仅作必要对照；首版只实现选定路径，文件 remap 仍由 VMM 校验并执行。 |
+| StratoVirt | 内部/外部 handler 按共同标准选型，首版只实现选定路径；文件 remap 仍由 VMM 校验并执行。 |
 | lazyd | 把内容 ready、共享取数任务和会话等待者分开；实现原子领取缺失范围、完成通知和失败清理；UFFD 适配按所选路径接入，来源更新不替换公共任务。 |
 
 ## 对数据服务的具体启发
@@ -28,7 +28,7 @@
 
 ## 选择与差异
 
-pmem 主线优先验证外部 handler，但不复制 RAFS 布局或同名协议。先根据原生 EROFS 的内容范围和并发需求设计对象，再评估可复用的 lazyd 实现。服务端已合入不代表 VMM 端任意接法都可用。
+不因 Nydus 使用外部 handler 就优先选择它，也不复制 RAFS 布局或同名协议。按[核心选型计划](../../04-conch-design-reference/09-core-design-selection.md)比较原生 EROFS 的缓存、提交、任务和 handler；自有 lazyd 实现只是资产。服务端已合入不代表 VMM 端任意接法都可用。
 
 ## 如何验证
 

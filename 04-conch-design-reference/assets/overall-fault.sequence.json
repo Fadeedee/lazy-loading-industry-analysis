@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "冷缺页：取数、映射与唤醒",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [
+      1040,
+      550
+    ]
+  },
+  "participants": [
+    {
+      "id": "guest-reader",
+      "label": "Guest",
+      "sublabel": "访问只读文件",
+      "type": "backend"
+    },
+    {
+      "id": "fault-kernel",
+      "label": "宿主机内核",
+      "sublabel": "页表与 UFFD",
+      "type": "backend"
+    },
+    {
+      "id": "mapping-vmm",
+      "label": "StratoVirt",
+      "sublabel": "映射完成执行者",
+      "type": "backend"
+    },
+    {
+      "id": "range-service",
+      "label": "lazyd",
+      "sublabel": "handler 与内容服务",
+      "type": "backend"
+    },
+    {
+      "id": "remote-blob",
+      "label": "Registry",
+      "sublabel": "范围读取来源",
+      "type": "cloud"
+    },
+    {
+      "id": "durable-cache",
+      "label": "共享缓存",
+      "sublabel": "数据与 bitmap",
+      "type": "database"
+    }
+  ],
+  "messages": [
+    {
+      "id": "access-pmem",
+      "from": "guest-reader",
+      "to": "fault-kernel",
+      "y": 160,
+      "label": "DAX 访问缺失页"
+    },
+    {
+      "id": "emit-fault",
+      "from": "fault-kernel",
+      "to": "range-service",
+      "y": 190,
+      "label": "UFFD 缺页事件；访问等待",
+      "variant": "emphasis"
+    },
+    {
+      "id": "fetch-missing",
+      "from": "range-service",
+      "to": "remote-blob",
+      "y": 220,
+      "label": "只取缺失范围"
+    },
+    {
+      "id": "receive-range",
+      "from": "remote-blob",
+      "to": "range-service",
+      "y": 250,
+      "label": "返回内容字节",
+      "variant": "return"
+    },
+    {
+      "id": "commit-content",
+      "from": "range-service",
+      "to": "durable-cache",
+      "y": 280,
+      "label": "校验、写入、同步"
+    },
+    {
+      "id": "ready-persisted",
+      "from": "durable-cache",
+      "to": "range-service",
+      "y": 310,
+      "label": "ready 持久化完成",
+      "variant": "return"
+    },
+    {
+      "id": "export-readonly",
+      "from": "range-service",
+      "to": "mapping-vmm",
+      "y": 340,
+      "label": "只读 FD 与合法 ready 范围",
+      "variant": "security"
+    },
+    {
+      "id": "install-mapping",
+      "from": "mapping-vmm",
+      "to": "fault-kernel",
+      "y": 370,
+      "label": "校验后执行文件 remap"
+    },
+    {
+      "id": "complete-wait",
+      "from": "mapping-vmm",
+      "to": "fault-kernel",
+      "y": 400,
+      "label": "完成对应等待 / wake",
+      "variant": "emphasis"
+    },
+    {
+      "id": "retry-access",
+      "from": "fault-kernel",
+      "to": "guest-reader",
+      "y": 430,
+      "label": "重试并访问文件页",
+      "variant": "return"
+    },
+    {
+      "id": "report-complete",
+      "from": "mapping-vmm",
+      "to": "range-service",
+      "y": 460,
+      "label": "本区域完成结果",
+      "variant": "return"
+    }
+  ]
+}
