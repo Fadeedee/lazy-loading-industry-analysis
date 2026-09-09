@@ -4,6 +4,8 @@
 
 ## 从这里开始
 
+当前工作只推进三个决定：**外部 handler 的可靠闭环、缓存布局与持久发布、共享任务与取消边界**。先读核心选型，再按问题查证据；产品资料是参考库，不是必读清单。预取、工作集学习与复杂调度属于后续研究。新增源码筛查见[Dragonfly / JuiceFS 定向记录](appendix/targeted-screening-2026-09-09.md)。
+
 1. **先看当前要决定什么**：[核心设计选型与验证计划](04-conch-design-reference/09-core-design-selection.md)。区分固定需求与未定实现，对照缓存布局、持久化、共享任务和 handler 位置；实验尚未执行。
 2. **需要更简短的入门**：[我们要解决什么问题](01-overview.md)。先分清镜像文件、运行时磁盘和内存，不必先懂 UFFD。
 3. **需要继续深入**：按操作读[冷启动](05-flows/01-cold-rootfs-lazy-start/README.md)或[快照恢复](05-flows/03-checkpoint-template-restore/README.md)；想知道选择依据，再读[八个设计问题与证据](04-conch-design-reference/08-design-decisions-and-evidence.md)。

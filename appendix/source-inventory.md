@@ -4,6 +4,20 @@
 
 ## 记录规则
 
+### 定向筛查补充：2026-09-09
+
+以下仅为固定 commit 的源码静态核查，未运行测试，不推定对应能力已发布。详细范围和实验影响见[筛查记录](targeted-screening-2026-09-09.md)。其余来源的版本与核查日期不变。
+
+| Source ID | 第一方源码 | 核查范围 | 状态 |
+| --- | --- | --- | --- |
+| [SRC-DF-001] | [Dragonfly PieceNotifier](https://github.com/dragonflyoss/client/blob/d5bccb022e805944080334236eb61d3ac5103bee/dragonfly-client-storage/src/piece_notifier.rs) | owner 领取、共享通知、终态清理及文件内测试 | merged；发布版本未核查 |
+| [SRC-DF-002] | [Dragonfly storage](https://github.com/dragonflyoss/client/blob/d5bccb022e805944080334236eb61d3ac5103bee/dragonfly-client-storage/src/lib.rs) | wait_for_piece_finished、download_piece_failed 的通知与超时路径 | merged；完整取消链未核查 |
+| [SRC-JFS-001] | [JuiceFS disk_cache.go](https://github.com/juicedata/juicefs/blob/5f250030ec437d6c676355e7a99f92b8ec480747/pkg/chunk/disk_cache.go) | flushPage、写入/关闭/rename helper、cleanupFull | merged；发布版本未核查 |
+| [SRC-JFS-002] | [JuiceFS singleflight.go](https://github.com/juicedata/juicefs/blob/5f250030ec437d6c676355e7a99f92b8ec480747/pkg/chunk/singleflight.go) | Controller.Execute 的共享等待与 Page 引用 | merged；未运行测试 |
+| [SRC-JFS-003] | [JuiceFS cached_store.go](https://github.com/juicedata/juicefs/blob/5f250030ec437d6c676355e7a99f92b8ec480747/pkg/chunk/cached_store.go) | rSlice.ReadAt 的 group.Execute 调用与闭包 context | merged；非完整读取链审计 |
+
+### 通用规则与既有核查
+
 **来源分类：** lazyd 样本、toolkit/lazyd 中的 bitmap 工作及旧 StratoVirt 实验属于自有实现与实验材料；Nydus、SOCI 等属于外部参考。各来源按所记录的版本和核查范围使用。
 
 每个来源使用唯一 ID：`[SRC-项目-编号]`。同一个网页或源码 commit 只登记一次；正文可以重复引用该 ID。
