@@ -84,7 +84,7 @@ clear ready 也需明确持久化和错误语义。范围若已被 VMM 映射，
 - 排队、远端请求和完成等待都有 deadline/取消。仅可重试的错误按有限预算退避；格式、权限、内容校验失败不能无限重试。
 - 当前缺页优先于后台预取，同时限制单会话占用，避免大 VM 挤死其他 VM。已经发出的请求未必能立即抢占，因此还要限制后台单次范围和并发。
 
-固定 bitmap 单元、网络下载窗口、返回映射范围分别定义。后续动态窗口只覆盖确认缺失的单元，预取只在预算内扩展；Conch 提供场景/节点预算，lazyd 利用已有需求事件和指标执行。远端工作集统计不是上述基础改造的前置，详见[预取策略](../03-design-comparison/06-cache-dedup-and-prefetch.md)。
+缓存记录粒度、网络下载窗口、返回映射范围分别定义。动态窗口只覆盖确认缺失的单元，预取在预算内扩展；调用方提供可选优先级和预算，lazyd 利用需求事件和指标执行。远端工作集统计不是基础改造的前置，详见[预取策略](../03-design-comparison/06-cache-dedup-and-prefetch.md)。
 
 ## 会话权限与回收
 
@@ -98,7 +98,7 @@ Conch 释放当前 attachment；lazyd 回收前同时检查持久使用关系、
 
 ## UFFD 与快照扩展放在哪里
 
-pmem 的内部/外部 handler 尚未选定。若采用外部方案，事件读取、region lookup 与完成关联进入适配模块；内容核心仍只处理明确内容范围。若选内部 handler，则提供范围入口；产品只新增选定方案。文件 remap 必须由 StratoVirt 执行或严格控制，不为了把 handler 外置而扩大 VMM 的内容职责。缓存和任务模型也需先完成[核心选型](09-core-design-selection.md)，不默认原结构不变。
+外部 handler 为主方案：事件读取、region lookup 与完成关联进入 lazyd 适配模块；内容核心只处理内容范围。文件 remap 由 StratoVirt 执行或严格控制；Conch 不进入每次缺页路径。运行模型和通用接口见[lazyd 专题](../06-lazyd-design/README.md)，缓存与任务模型仍待[核心选型](09-core-design-selection.md)。
 
 后续磁盘历史和 RAM 快照分别增加类型适配：解析确定快照视图与父层，向共同内容核心取不可变字节。磁盘当前写层、RAM 脏页、页驻留和晚到填充规则不塞进镜像 bitmap。优先复用上游恢复索引和专用 backend，不要求 lazyd 重写 VMM 恢复框架。
 

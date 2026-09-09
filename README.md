@@ -24,6 +24,8 @@ Conch、StratoVirt 的开发基线是**开发开始时最新 upstream/dev 的明
 
 ## 按问题查资料
 
+lazyd 定位为独立通用供数服务，Conch 是调用方之一；外部 handler 为待验证主方案，StratoVirt 改动收敛。服务模型、扩展和调度研究从 [lazyd 设计专题](06-lazyd-design/README.md)开始阅读，具体协议与缓存格式仍待验证。
+
 | 你想知道 | 入口 |
 | --- | --- |
 | 当前选型与下一步验证 | [核心设计选型与验证计划](04-conch-design-reference/09-core-design-selection.md) |

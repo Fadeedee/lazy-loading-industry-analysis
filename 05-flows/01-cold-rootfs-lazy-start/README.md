@@ -25,7 +25,7 @@ Conch 按 EROFS + pmem/DAX 主线及独立可写层生成启动配置。StratoVi
 | 当前主线：只读 EROFS + pmem/DAX，加独立可写层 | 文件数据通过 pmem 映射访问 | 文件系统能力、地址映射、fault 处理及数据来源 |
 | 可选对照：rootfs 纳入块设备/COW 视图 | 文件系统产生块请求 | 块视图、父层索引、读写后端及私有 writable head |
 
-本页流程图是外部 UFFD handler 候选的说明，不代表优先选用；内部/外部及缓存布局按[核心选型计划](../../04-conch-design-reference/09-core-design-selection.md)比较，产品只保留选定的新路径。块方案利用已有设备/外部后端，不为比较另写 VMM 块存储引擎。**发送过 FD 不等于数据来源已就绪**；注册事件处理、来源确认、失败通道要一起满足启动门槛。
+本页流程图说明外部 UFFD handler 主方案，交接与完成仍需验证；内部为备选，状态见[核心选型计划](../../04-conch-design-reference/09-core-design-selection.md)。块方案利用已有设备/外部后端，不为比较另写 VMM 块存储引擎。**发送过 FD 不等于数据来源已就绪**；注册事件处理、来源确认、失败通道要一起满足启动门槛。
 
 ## 3. 第一次读文件时发生什么
 

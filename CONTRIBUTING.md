@@ -27,6 +27,8 @@
 
 ## 目录职责
 
+服务模型与扩展规则以 [lazyd 专题](06-lazyd-design/README.md)为准：Conch 是调用方之一，产品语义不进入供数核心；StratoVirt 改动收敛。影响行为的参数显式定义，labels/extensions 只承载允许的调用方元数据。外部 handler 的主方案与验证状态统一维护在核心选型登记中。
+
 | 位置 | 写什么 |
 | --- | --- |
 | `README.md` | 阅读入口、范围、图形导航 |
@@ -37,6 +39,7 @@
 | `04-conch-design-reference/` | 本项目职责、设计决策、与业界实现的对应关系 |
 | `04-conch-design-reference/00-overall-design.md` | 纯方案阅读入口，连贯讲目标、架构、流程和边界；不展开业界比较或源码审计 |
 | `05-flows/` | 前置资源、正常/失败流程、缓存命中和验收观察点 |
+| `06-lazyd-design/` | 独立服务模型、扩展、运行与缓存约束、调度研究；不重复维护选型状态 |
 | `appendix/` | 来源记录、成熟度矩阵和术语 |
 
 每个主题保留一个详细说明位置，其他文档通过摘要和相对链接引用。产品内部实现较长时，放入对应产品的 `01-data-path.md` 或 `02-cache-snapshot-lifecycle.md`，避免多处复制后逐渐不一致。

@@ -4,6 +4,8 @@
 
 ## 从用户操作到资源计划
 
+Conch 将产品语义转换为通用内容描述、授权使用关系及可选优先级/deadline/预算；lazyd 不解析 Sandbox、Template、Checkpoint 类型，也不依赖 Conch 回调完成每次缺页。业务关联信息放在调用方拥有的元数据中，规则见[接口与扩展](../06-lazyd-design/02-api-and-extensibility.md)。
+
 创建时选择确定的镜像版本；恢复时选择同一个一致 checkpoint 中的镜像、磁盘、内存和设备状态。为每项资源确定完整/按需策略、授权范围、节点约束和截止时间。
 
 这里的“资源计划”是设计概念，尚未冻结为某个 Go struct 或新服务。优先放进当前 Template、BootPreparer、Sandbox 和 VMM driver 分层。[上游接入点](01-current-system-boundary.md)给出已核查源码。
