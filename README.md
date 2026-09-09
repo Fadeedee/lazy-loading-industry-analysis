@@ -14,6 +14,10 @@
 
 三个项目都在设计和修改范围内。Conch 面向用户组织启动、运行、快照和删除；StratoVirt 提供虚机执行能力；lazyd 的服务范围可按整体需求演进。分工由场景和工程约束推导，不以某个现有 API 为边界。
 
+调研先问内容身份、并发请求、完成条件和关闭责任，再决定哪些代码保留或重组。产品事实不是改造方案；[数据服务横向比较](03-design-comparison/08-data-service-architecture.md)将第一方证据、待查缺口和三仓设计推导放在一起，不默认 lazyd 的现有结构不变。
+
+当前只读 rootfs 主线是 **EROFS + pmem/DAX**，整盘块方案只是对照，不是并列开发任务。lazyd 先完善共享内容、会话隔离、有界调度和缓存安全，再扩展预取与快照来源；详情见 [lazyd 架构与改进](04-conch-design-reference/04-lazyd-responsibilities.md)。
+
 Conch、StratoVirt 的开发基线是**开发开始时最新 upstream/dev 的明确 commit**。本次核查见[上游能力基线](04-conch-design-reference/01-current-system-boundary.md)。正文区分产品事实、设计建议和待验证选项；本次重写没有产生产品代码或新的性能结果。
 
 ## 按问题查资料
@@ -22,6 +26,7 @@ Conch、StratoVirt 的开发基线是**开发开始时最新 upstream/dev 的明
 | --- | --- |
 | page、COW、DAX、UFFD 是什么 | [基础概念](00-concepts/)与[术语表](appendix/glossary.md) |
 | 某个产品究竟怎么做 | [产品分析](02-products/) |
+| 共享缓存之外，数据服务还要设计什么 | [身份、任务、持久化与生命周期比较](03-design-comparison/08-data-service-architecture.md) |
 | 文件、块、pmem 哪个合适 | [技术路线比较](03-design-comparison/) |
 | 三个仓各改哪里 | [Conch](04-conch-design-reference/03-conch-responsibilities.md)、[StratoVirt](04-conch-design-reference/05-stratovirt-responsibilities.md)、[lazyd](04-conch-design-reference/04-lazyd-responsibilities.md) |
 | 怎么安排开发与验收 | [联合实施路线](04-conch-design-reference/07-phased-roadmap.md) |

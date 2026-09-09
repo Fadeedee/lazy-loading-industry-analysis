@@ -57,6 +57,8 @@ guestd 位于 `internal/agent/guestd`，归 Conch 仓维护。设备识别、挂
 
 这些可以降低实现成本，但不要求继续使用同名 API、固定单位或固定服务职责。只读句柄、缓存完整性、授权、跨服务回收等仍要按新方案审计；不能把样本已有测试等同于三仓新版本联调通过。
 
+2026-09-09 对同一 lazyd commit 补做静态核查：Instance 集中内容/来源/执行状态、inflight 以 5ms 轮询等待、异步连接内阻塞 socket I/O、外发 target 克隆句柄及 Range 响应检查边界。代码定位、风险与改进验收集中在 [lazyd 架构与改进](04-lazyd-responsibilities.md)。未重跑产品测试，也未刷新 Conch/StratoVirt 上游或 PR 状态。
+
 ## 实施前的检查
 
 先记录三个实际开发 tip，再看 upstream 是否已改变上述路径。保留正常启动、快照恢复和关闭行为的回归用例；从需求出发增加 source/attachment 能力，不直接把路径参数或历史实验分支当成设计约束。

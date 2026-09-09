@@ -59,7 +59,7 @@ OpenSandbox 的 lifecycle 规范提供 snapshot 资源和 restore API，但公�
 
 ### 路径 A：只读 rootfs lower
 
-启动前需要可解析的文件系统视图和可服务的数据来源；内容可按文件、块或 pmem/DAX 访问补齐。EROFS/pmem 只是其中一种候选。
+启动前需要可解析的文件系统视图和可服务的数据来源。通用机制包括文件、块或 pmem/DAX；本项目当前选择 EROFS + pmem/DAX 作为只读 rootfs 主线，其他机制作为对照，不是并列开发任务。
 
 ### 路径 B：可写 disk diff
 
@@ -112,7 +112,7 @@ E2B 同时使用 Firecracker UFFD memory、模板 memfile prefetch、只读 temp
 
 ## 7. 从概念到三仓设计
 
-Conch 适合协调恢复图、发布、取消和生命周期；lazyd 可提供多类不可变对象的内容供应；StratoVirt 提供设备、地址空间和 VM 恢复能力。类型适配器和 handler 的进程归属可以共同调整。
+Conch 协调恢复图、发布、取消和生命周期；lazyd 分清内容对象、来源、共享任务和运行会话，先服务镜像再按需扩展来源；StratoVirt 提供必要的设备、地址空间和 VM 恢复能力。类型适配器和 handler 的进程归属可以共同调整，复用内容不等于复用每台 VM 的恢复状态。
 
 必须明确的是磁盘写入、内存脏页、不可变缓存 ready 的区别。协议和调度可以复用，不能因复用而丢失这些语义。具体候选见[一致恢复设计](../04-conch-design-reference/06-checkpoint-three-path-restore.md)。
 

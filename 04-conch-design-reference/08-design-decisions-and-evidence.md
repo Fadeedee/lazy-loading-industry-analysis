@@ -2,13 +2,15 @@
 
 > 不从某个 API 开始。先问一次启动或恢复要解决什么，再比较业界做法，决定三个仓共同承担哪些改动。
 
-本文于 2026-09-08 整理，2026-09-09 补充可选的远端工作集统计建议。上游事实见[核查基线](01-current-system-boundary.md)；产品证据保留[来源清单](../appendix/source-inventory.md)中的核查版本。本次没有新增产品测试或性能数字。
+本文于 2026-09-08 整理，2026-09-09 明确 pmem 主线、补充 lazyd 产品化设计、数据服务比较及可选远端工作集统计。上游事实见[核查基线](01-current-system-boundary.md)；产品证据保留[来源清单](../appendix/source-inventory.md)中的核查版本。本次没有新增产品测试或性能数字。
 
 ## 先看设计主线
 
 **准备镜像或快照 → 创建或恢复沙箱 → 按需访问 → 保存快照 → 停止与回收。**
 
 我们希望业务更早可用，不是只让 pull 更快。以下八项分别说明建议、替代方案、证据及验证；接口名和进程数尚未冻结。
+
+**当前只读 rootfs 围绕 EROFS + pmem/DAX 开发，配合独立可写层。** 整盘块方案保留为对照，不是本轮并列主线或必须先完成的选型项目。lazyd 则需要从现有取数闭环走向有共享任务、会话隔离和资源上限的数据服务，而不只是保留原接口、增加预取。
 
 **联合设计，分清改动边界：** Conch 管资源和整体流程，lazyd/数据源管内容与供数，StratoVirt 只补设备、地址空间、页完成和运行控制的必要能力。下文候选用于选型，不是首版功能累加清单；VMM 的具体范围见[StratoVirt 职责](05-stratovirt-responsibilities.md)。
 
@@ -55,9 +57,13 @@ VM1 下载了一个库，VM2 应在授权允许时直接复用。缓存身份要
 
 [Nydus 镜像设计](https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/docs/nydus-design.md)用 metadata 定位 chunk/blob。[SOCI zTOC](https://github.com/awslabs/soci-snapshotter/blob/238af848f32fcb887072c144b09ee65a3a895f9c/docs/glossary.md)保存文件位置和压缩流检查点，让读者定位可独立处理的范围。共同点是把读取位置绑定到确定内容，不依赖可变 tag；并不是双方都有同名 prepare API。[SRC-NYDUS-001] [SRC-SOCI-004]
 
+[Nydus BlobStateMap](https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/storage/src/cache/state/blob_state_map.rs)另用在途表和 Slot 协调重复读取，等待通知后重新检查 ready，说明缓存状态之外还需要任务协调。它并不证明每 VM 取消、跨租户权限或持久化边界已经替我们解决。具体过程与差异见[数据服务比较](../03-design-comparison/08-data-service-architecture.md)。[SRC-NYDUS-010]
+
 ### 三仓怎样协作
 
 Conch 保存可跨节点使用的资源描述与授权引用；lazyd 管内容索引和本地缓存；StratoVirt 使用本次 attachment 的区域布局和不透明来源标识，不解析镜像 tag、digest 或 cache key。
+
+对 lazyd，内容对象、来源凭据和运行会话需要分开：重复 prepare 不替换共享任务状态，两个 VM 等待同一缺失范围时共用完成结果，取消只撤销当前等待者。现有代码的 Instance 重开、5ms 轮询等待及待完善的任务/会话模型见 [lazyd 具体设计](04-lazyd-responsibilities.md)。这些是本项目改进，不是上述参考项目同名接口的迁移。
 
 可以按整 blob、chunk 或组合 artifact 缓存。若使用可映射文件，共享物理页还要求映射到同一实际文件页；两个相同 digest 的独立缓存文件不会自动共享 page cache。
 
@@ -69,7 +75,7 @@ Conch 保存可跨节点使用的资源描述与授权引用；lazyd 管内容�
 
 以两台 VM 读取 Python 为例。“下载一次”只说明网络复用；若再复制进各自的匿名内存，仍可能占多份物理页。
 
-要进一步共享文件页，可以采用 pmem/DAX 路径；也可以用块设备供应整盘，换取更统一的读写快照管理。我们优先验证前者的共享收益，同时保留后者作为端到端成本对照，不预设 pmem 一定更快。
+当前采用 pmem/DAX 作为只读 rootfs 主线，验证同一缓存文件页的共享收益。块设备供应整盘可以作为读写快照管理成本的对照，但不并行开发另一条 rootfs 产品路径；主线明确也不代表已证明 pmem 在所有负载下更快。
 
 选了 UFFD 后，还要分别决定：
 
@@ -121,6 +127,8 @@ UFFD FD 是缺页通知/处理句柄，缓存文件 FD 是数据访问句柄。�
 
 可选持久 bitmap，也可使用原子发布的分块文件或日志索引。选择根据同步成本、并发、掉电恢复和格式兼容决定，不先固定 bitmap 格式。SEEK_DATA/HOLE 只能发现明显洞；任意 range 的强校验需要可信局部摘要等依据。
 
+实施时先保留已有 sparse/bitmap，明确取数中、待持久化、ready 已提交和失败隔离的区别；外发只读 FD，保护仍被映射的文件。清 bitmap 不会撤销 guest 已有映射，因此损坏不能靠原地覆盖或截断修复。换缓存格式与批量同步属于有证据后再做的优化，不能代替这些基础边界。
+
 Conch 只接收清楚的准备状态；内容服务负责数据正确性；StratoVirt 不映射未经承诺的缺失范围。可批量同步，但不能让持久 ready 领先数据。
 
 **验证：** 部分写入、同步失败、重开文件、重启、缓存损坏及错误响应。常规单测不能代替真实掉电测试。
@@ -135,6 +143,8 @@ Nydus 的 prefault 是握手后异步枚举已缓存范围，不代表预测下�
 
 建议 Conch 提供场景、截止时间和节点预算，lazyd 调度下载。先使用 handler 已收到的事件和现有指标；只有测量证明必要时，才评估最小的 VMM 访问/驻留反馈接口。新增访问追踪框架不是首版前置，网络策略和预取算法不进入 StratoVirt。
 
+先补 lazyd 的有界执行：阻塞 socket/磁盘工作不占住异步请求线程，连接、队列、在途字节和重试有上限；重复请求复用任务，前台优先且会话间保持公平。固定 bitmap 单元与动态下载窗口分离。代码证据、正常/失败状态和验收见 [lazyd 架构与改进](04-lazyd-responsibilities.md)，这部分优先于预测预取。
+
 单次请求慢可能来自鉴权、连接或拥塞，不能据此无限扩大范围。当前需求优先，后台请求有大小和并发上限；启动前等待预取是单独策略，必须计入启动成本。
 
 **后续可选：远端聚合启动工作集。** 在授权范围内，采集同版本、同类工作负载的启动需求范围，异步聚合成版本化清单，后续由本地 lazyd 按缓存、网络和预算执行预取。Conch 管阶段、授权和清单发布，lazyd 管采集与执行，StratoVirt 不增加热点学习系统。它不是首版前置，清单不可用时继续按需加载。
@@ -143,9 +153,9 @@ Nydus 的 prefault 是握手后异步枚举已缓存范围，不代表预测下�
 
 **验证：** full、纯按需、工作集预取和提前映射分别对照；覆盖高延迟、限带宽、随机访问、小镜像和多 VM。详见[网络与预取](../03-design-comparison/06-cache-dedup-and-prefetch.md)。
 
-## 6. 恢复写入的文件：分离镜像与磁盘，还是统一整盘？
+## 6. 恢复写入的文件：pmem 镜像与私有磁盘怎样配合？
 
-有两条合理候选：只读镜像 pmem + 私有块写层，或整盘块快照 + COW。前者可能节省只读页复制，后者可能减少设备和快照组合复杂度。不要先因“已有 pmem”排除整盘方案。
+当前按只读镜像 pmem + 私有块写层设计：镜像继续共享，运行时新增和修改的数据进入私有写层，checkpoint 保存其历史视图。整盘块快照 + COW 保留作对照，它可能减少设备和快照组合复杂度，但不因此把两条路径都列为首版任务。
 
 [E2B Overlay](https://github.com/e2b-dev/infra/blob/cc7c574233ad98665a7c72a3d37b0af89ae79a71/packages/orchestrator/pkg/sandbox/block/overlay.go)读取依次检查 writable cache、封存中的 cache 和 base，新写入只进入当前 cache。[OverlayBD](https://github.com/containerd/overlaybd/blob/f63addfd8e51bd9eeecc12f5f4670c281a74d6e8/README.md)提供只读层加可写顶层，并支持提交或切换写层。[SRC-E2B-002] [SRC-OVERLAYBD-001]
 
@@ -173,7 +183,9 @@ Conch 定位一致快照与父层，数据源的内存适配器复用索引解�
 
 [E2B 的多来源恢复](https://github.com/e2b-dev/infra/blob/cc7c574233ad98665a7c72a3d37b0af89ae79a71/docs/ARCHITECTURE.md)提供编排参考；[Conch Sandbox store](https://gitcode.com/openeuler/Conch/blob/8248022005542407f53b606a8be979379a3fd38b/internal/adapters/containerd/sandbox/store.go)提供持久引用接入点。它们不自动解决外部缓存的租约。[SRC-E2B-001] [SRC-CONCH-001]
 
-准备失败时取消兄弟任务并释放本次 attachment；运行中不可恢复错误终止受影响 VM 并报告原因；删除只释放当前使用关系。共享服务要考虑错误隔离，不能一次超时终止所有租户。
+[E2B NBDProvider](https://github.com/e2b-dev/infra/blob/cc7c574233ad98665a7c72a3d37b0af89ae79a71/packages/orchestrator/pkg/sandbox/rootfs/nbd.go)将设备就绪与关闭分开，但关闭过程中的通知也不代表所有清理成功。我们需要进一步定义共享缓存的释放条件，不能把私有写 cache 的 Close 直接套用；详见[生命周期证据](../02-products/12-e2b-and-firecracker-stacks/02-cache-snapshot-lifecycle.md)。[SRC-E2B-004]
+
+准备失败时取消本次操作的兄弟请求并释放 attachment，不终止其他会话仍在等待的共享取数任务；运行中不可恢复错误终止受影响 VM 并报告原因；删除只释放当前使用关系。共享服务要考虑错误隔离，不能一次超时终止所有租户。
 
 回收需覆盖 Template、快照父层、运行映射和 in-flight 操作。打开 FD 可能延长 inode 生存期，但不等于路径重开、bitmap、重启恢复和远端依赖都受保护。
 
@@ -181,4 +193,4 @@ Conch 定位一致快照与父层，数据源的内存适配器复用索引解�
 
 ## 现在可以决定什么？
 
-可以确定联合流程、VMM 最小职责和正确性门槛；handler 位置、磁盘组合、协议/进程组织、预取策略仍按[实施路线](07-phased-roadmap.md)进行有顺序的验证。每个选择都记录接受条件和否决条件，首版只实现选定路径，再冻结其必要跨仓契约，不把所有候选扩展一并加入 StratoVirt。
+可以确定 pmem 主线、独立写层、联合流程、lazyd 基础改造和 VMM 最小职责。handler 位置、具体布局/协议/进程组织及预取策略按[实施路线](07-phased-roadmap.md)验证，快照来源分阶段接入。出现明确阻碍再重新评估路线，不把所有备选累加成首版功能；选定接口需有跨仓测试，但不提前冻结尚无依据的全部 ABI。

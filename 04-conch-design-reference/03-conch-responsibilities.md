@@ -37,9 +37,11 @@ Conch 负责等待数据源和 VMM attachment 达到可处理读取的状态，�
 
 网络策略也不是全部下放：Conch 可提供本次启动/恢复优先级、节点总预算和业务 deadline，数据服务负责具体请求调度。
 
+对 lazyd 的新接入要分开表达共享内容与运行 attachment：同内容重复 prepare 不重建共享任务，凭据更新不改变内容身份，取消和删除只释放当前使用关系。Conch 不逐个管理下载任务；内容服务负责剩余等待者、预算和引用保护，详见 [lazyd 架构](04-lazyd-responsibilities.md)。
+
 ## guestd 也在 Conch 的修改范围
 
-guestd 是 `internal/agent/guestd` 中的 guest agent。若选择多设备 EROFS+DAX 路径，需要稳定的 layer/view 到设备身份、挂载顺序和能力检查。若选择整盘块路径，则按对应根盘与写层布局准备，不能继续套用 pmem 顺序。
+guestd 是 `internal/agent/guestd` 中的 guest agent。当前 EROFS+pmem/DAX 主线需要稳定的 layer/view 到设备身份、挂载顺序和能力检查；可写数据按独立写层布局组装。整盘块方案只是对照，不在本轮并行新增另一套 guestd 根盘路径。
 
 恢复时设备身份、地址和布局必须与快照匹配；不能只依靠新 VM 的自然枚举顺序。
 

@@ -6,6 +6,8 @@
 
 Conch 决定用哪些资源及何时运行，lazyd/数据源解释内容并供数。StratoVirt 只接入已选定的资源，在自己的地址空间和设备生命周期内安全完成访问。
 
+当前新增 rootfs 路径围绕 EROFS + pmem/DAX；仍需验证的是 handler 接入和页完成细节，不是同时实现 pmem 与整盘块两条产品路线。lazyd 的共享任务、来源/会话隔离和有界调度不进入 VMM，参见其[具体改进](04-lazyd-responsibilities.md)。
+
 | 必要职责 | 最小改动边界 |
 | --- | --- |
 | 设备与区域接入 | 复用 backend、Region、AddressSpace 和 KVM；补足所选按需来源的配置与注册 |
