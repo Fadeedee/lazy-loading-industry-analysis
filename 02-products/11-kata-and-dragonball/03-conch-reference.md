@@ -10,13 +10,19 @@
 
 完整解释：[读取路径](01-data-path.md)、[缓存与快照生命周期](02-cache-snapshot-lifecycle.md)。
 
+## 对数据服务的具体启发
+
+host 准备内容、VMM 暴露设备、guest 组装文件系统是同一次操作的不同阶段。对我们的服务，prepare 的结果必须能关联确定内容、设备布局和层顺序，但不应该把 host 上某个缓存路径作为跨节点永远有效的身份。
+
+lazyd 需要幂等地准备内容，并为本次运行建立独立的使用关系；Conch 将这些结果绑定到设备和 guest 挂载元数据。guest 挂载失败时释放本次使用关系，不能误删其他 VM 共用的缓存。这是从完整流程推导的要求；Kata 的集成文档并不证明其数据后端已经采用我们提出的共享任务、持久化或回收策略。
+
 ## 三仓怎样共同借鉴
 
 | 项目 | 可考虑的改动 |
 | --- | --- |
-| Conch | 联合修改原生资源准备、VMM 参数和 guestd，保证设备身份与挂载顺序一致。 |
-| StratoVirt | 提供与 machine type 匹配的设备/transport，恢复时保持布局兼容。 |
-| lazyd | 准备所选内容和访问句柄，不必承担 guest 的 mount 操作。 |
+| Conch | 在现有资源 owner 中贯通准备、设备参数和 guestd；保留 layer index 与稳定设备身份，处理挂载失败的回滚。 |
+| StratoVirt | 使用与 machine type 匹配的设备/transport，暴露可匹配的布局；不理解 OCI 层语义或管理 guest lowerdir。 |
+| lazyd | 维护可重复准备的内容对象与独立运行引用；返回经过授权的可用来源，路径变更或凭据刷新不重建公共取数状态。 |
 
 ## 选择与差异
 
@@ -24,6 +30,6 @@
 
 ## 如何验证
 
-设备重排、多层覆盖顺序、guest mount 失败、内核/transport 组合和恢复布局。
+验证设备重排、多层覆盖顺序、重复 prepare、跨节点重新绑定和 guest mount 失败回滚；其他 VM 仍使用该内容时不得删除缓存。再验证目标内核/transport 与恢复布局，不只检查生成的命令行。
 
-回到[联合设计决策](../../04-conch-design-reference/08-design-decisions-and-evidence.md)，比较该经验与其他候选，而不是单独据此定方案。
+参见[Conch 的资源编排职责](../../04-conch-design-reference/03-conch-responsibilities.md)与[数据服务横向比较](../../03-design-comparison/08-data-service-architecture.md)。

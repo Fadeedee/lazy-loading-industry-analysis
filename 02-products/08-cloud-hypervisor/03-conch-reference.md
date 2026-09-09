@@ -10,13 +10,19 @@ v53 发布说明包含 demand-paged guest memory restore、snapshot/restore offl
 
 完整解释：[读取路径](01-data-path.md)、[缓存与快照生命周期](02-cache-snapshot-lifecycle.md)。
 
+## 对数据服务的具体启发
+
+将恢复工作移出 VMM 后，仍要区分“VM 可以运行”“当前缺页已满足”和“后台恢复已完成”。对于我们的数据服务，缓存 ready 只能说明字节可用，不表示该 VM 所有页都已填充，更不表示来源可以立即删除。
+
+lazyd 可以用独立适配器服务上游 RAM 恢复入口，复用不可变内容缓存、共享任务和有界取数，而把写保护、驻留状态与恢复完成条件留在对应恢复组件。发布说明足以证明宣布了恢复/offload 能力，但不足以证明远端鉴权、FD 协议、全局调度或 GC 细节；不能据此宣称对方已经采用我们这套数据服务架构。
+
 ## 三仓怎样共同借鉴
 
 | 项目 | 可考虑的改动 |
 | --- | --- |
-| Conch | 把恢复状态、后台完成与运行状态分别呈现，管理服务和快照引用。 |
-| StratoVirt | 参考恢复基础机制与 source 交接，但不从发布说明推断具体 pmem 协议。 |
-| lazyd | 可以承担公共取数/缓存，也可以只适配已有恢复服务，避免重复实现。 |
+| Conch | 分别呈现运行、恢复和后台完成状态；在仍可能缺页时保护快照来源，关闭时等待相关使用关系结束。 |
+| StratoVirt | 复用自身上游恢复机制，只补必要交接和错误处理；不从 Cloud Hypervisor 发布说明推定 pmem 协议。 |
+| lazyd | 将来源读取和内容缓存与 RAM 页状态分开；通过适配器接已有服务，明确任务取消、超时与完成通知，不重写整套恢复控制。 |
 
 ## 选择与差异
 
@@ -24,6 +30,6 @@ v53 发布说明包含 demand-paged guest memory restore、snapshot/restore offl
 
 ## 如何验证
 
-后台恢复完成、前台等待、服务故障、版本协商，以及复用框架后的 pmem/RAM 回归。
+后续 RAM 阶段验证前台缺页不被后台队列饿死、EOF/超时可结束等待、后台完成后来源何时可释放，以及恢复服务版本/能力不匹配时的明确错误。若修改共享组件，再分别回归 pmem 和 RAM，不能由一种路径通过推出另一种通过。
 
-回到[联合设计决策](../../04-conch-design-reference/08-design-decisions-and-evidence.md)，比较该经验与其他候选，而不是单独据此定方案。
+参见[数据服务横向比较](../../03-design-comparison/08-data-service-architecture.md)与[内存恢复比较](../../03-design-comparison/03-memory-snapshot-restore.md)。

@@ -10,20 +10,26 @@ CacheFiles on-demand 用对象/范围请求通知用户态，用户态填充数�
 
 完整解释：[读取路径](01-data-path.md)、[缓存与快照生命周期](02-cache-snapshot-lifecycle.md)。
 
+## 对数据服务的具体启发
+
+最值得借鉴的是“数据缺失”与“请求完成”的明确握手，不是把本地文件路径交出去就算准备完成。对我们的服务，文件存在、范围已分配、数据写完、ready 已持久化、某个 VM 已完成映射，必须是可分别判断的状态。
+
+lazyd 应将内容对象和本次请求的关联分开管理：请求带有有效会话/区域代次，成功只能在可读范围提交后发布；错误也必须结束等待。重连后的旧完成消息不能完成新请求。这里借鉴的是对象与请求边界，不声称 CacheFiles 已替我们的用户态缓存解决持久化、权限和回收问题。
+
 ## 三仓怎样共同借鉴
 
 | 项目 | 可考虑的改动 |
 | --- | --- |
-| Conch | 根据目标内核、挂载路径和布局选择 rootfs 方案；可以复用正确的 snapshotter/mount 契约。 |
-| StratoVirt | 若选 pmem/DAX，需要真正拦截缺失地址访问，并验证设备与映射权限。 |
-| lazyd | 提供确定对象的内容和完成状态；不把文件洞作为可信下载索引。 |
+| Conch | 在 prepare 与启动之间检查内容服务和 guest 挂载条件；保留正确的 snapshotter/mount 契约，不把 sparse 路径存在作为可启动证明。 |
+| StratoVirt | 对 pmem/DAX 拦截缺失访问，核对区域代次、范围和权限，再完成对应等待；不自行把文件洞解释为有效零。 |
+| lazyd | 维护独立的 ready 和在途请求状态；保证写入、持久发布、完成通知的顺序，并在断连/恢复时处理未完成请求。 |
 
 ## 选择与差异
 
-借鉴请求/完成与对象管理，重新核对 EROFS fscache on-demand 的内核支持和维护限制，不把它作为无需验证的新依赖。EROFS 格式并不强制某一种设备路径。
+当前仍按 EROFS + pmem/DAX 设计，不新增 CacheFiles 或 fanotify 入口。若未来另选 fscache on-demand，必须重新核对目标内核支持和维护限制；本页沿用已登记的历史机制说明，不能视为最新内核支持承诺。EROFS 格式本身也不强制某一种设备路径。
 
 ## 如何验证
 
-guest kernel 能力、真实缺失数据读取、尾部零、服务退出和缓存恢复。
+验证真实缺失数据不能读成 sparse 零洞；覆盖 blob 尾页、请求失败、过期完成消息、服务退出和重开恢复。ready 状态与文件洞检测分别验证，不用 SEEK_DATA/HOLE 代替内容正确性检查。
 
-回到[联合设计决策](../../04-conch-design-reference/08-design-decisions-and-evidence.md)，比较该经验与其他候选，而不是单独据此定方案。
+参见[数据服务横向比较](../../03-design-comparison/08-data-service-architecture.md)与[lazyd 的持久化和回收设计](../../04-conch-design-reference/04-lazyd-responsibilities.md)。
