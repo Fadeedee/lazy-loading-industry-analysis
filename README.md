@@ -4,9 +4,9 @@
 
 ## 从这里开始
 
-1. **先看全貌**：[我们要解决什么问题](01-overview.md)。先分清镜像文件、运行时磁盘和内存，不必先懂 UFFD。
-2. **再看方案**：[八个设计问题与选择依据](04-conch-design-reference/08-design-decisions-and-evidence.md)。每项先讲场景，再给候选方案、参考链接、三仓改动和验证。
-3. **沿一次操作读下去**：[冷启动](05-flows/01-cold-rootfs-lazy-start/README.md)或[快照恢复](05-flows/03-checkpoint-template-restore/README.md)。
+1. **先读纯方案版**：[整体设计方案](04-conch-design-reference/00-overall-design.md)。从目标、三仓分工讲到启动、共享、失败和快照，正文不穿插产品对比或源码分析。
+2. **需要更简短的入门**：[我们要解决什么问题](01-overview.md)。先分清镜像文件、运行时磁盘和内存，不必先懂 UFFD。
+3. **需要继续深入**：按操作读[冷启动](05-flows/01-cold-rootfs-lazy-start/README.md)或[快照恢复](05-flows/03-checkpoint-template-restore/README.md)；想知道选择依据，再读[八个设计问题与证据](04-conch-design-reference/08-design-decisions-and-evidence.md)。
 
 到这里即可讨论整体架构。函数、地址术语和源码版本放在详细章节，不需要逐页读完整个仓库。
 
@@ -24,6 +24,7 @@ Conch、StratoVirt 的开发基线是**开发开始时最新 upstream/dev 的明
 
 | 你想知道 | 入口 |
 | --- | --- |
+| 只想完整理解我们的方案 | [整体设计方案（纯方案版）](04-conch-design-reference/00-overall-design.md) |
 | page、COW、DAX、UFFD 是什么 | [基础概念](00-concepts/)与[术语表](appendix/glossary.md) |
 | 某个产品究竟怎么做 | [产品分析](02-products/) |
 | 共享缓存之外，数据服务还要设计什么 | [身份、任务、持久化与生命周期比较](03-design-comparison/08-data-service-architecture.md) |
