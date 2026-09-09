@@ -10,6 +10,10 @@
 
 2026-09-09 补充远端工作集建议时，仅复核固定版本 eStargz 文档的 workload-based optimization 章节，确认转换阶段采样及运行前预取的描述。跨实例远端聚合是本项目待验证建议，不是该来源已实现能力；其他来源与三仓基线日期不变。
 
+同日完善 lazyd 设计时，静态核对本地与 `751d647fb37f` 一致的 Instance/register、ensure_range、inflight、FD 导出、socket 数据面和 OCI Range 实现，记录现状及待验证风险；未修改或运行产品代码。Conch/StratoVirt 上游状态未刷新；Nydus/E2B 证据沿用原核查，不把本次建议编辑算作重新审查全部来源。
+
+随后系统整理 13 个产品借鉴章节时，额外读取固定版本 Nydus `state/mod.rs`、`blob_state_map.rs` 和 E2B `rootfs/nbd.go`，分别补足 pending/ready 协调及 provider 就绪/关闭的源码证据。其余产品沿用原研究并明确证据缺口；这不是全产品最新版本审计，也没有新增运行或性能测试。
+
 | Source ID | 项目 | 第一方资料 | URL | 本地证据 | commit/tag | 访问日期 | 成熟度 | 支撑结论 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | [SRC-META-001] | 本调研 | 来源记录规则 | 本文件 | 不适用 | 不适用 | 2026-09-04 | released | 定义来源字段和成熟度用法 |
@@ -21,6 +25,8 @@
 | [SRC-NYDUS-006] | Nydus UFFD protocol | VmaRegion / HandshakeRequest | https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/service/src/uffd_proto.rs | 固定版本源码 | `8aa80aee6e77` | 2026-09-08 | merged | region 默认 READ/PRIVATE/FIXED；定义 Handshake/Stat/PageFault 等交互 |
 | [SRC-NYDUS-007] | Nydus block device | fetch_ranges / probe_blob_ranges | https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/service/src/block_device.rs | 固定版本源码 | `8aa80aee6e77` | 2026-09-08 | merged | flattened block 到 metadata/data/hole；probe_only 枚举 ready，不拉新数据 |
 | [SRC-NYDUS-008] | Nydus storage | validate_chunk_data | https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/storage/src/cache/mod.rs | 固定版本源码 | `8aa80aee6e77` | 2026-09-08 | merged | 校验受配置、CRC/强制参数和 legacy stargz 条件约束；CRC 不等于密码学 hash |
+| [SRC-NYDUS-009] | Nydus cache state | ChunkMap / RangeMap | https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/storage/src/cache/state/mod.rs | GitHub raw 固定版本源码 | `8aa80aee6e77` | 2026-09-09 | merged | ready/pending、领取、完成/清理和范围等待接口；不单凭接口证明持久化安全 |
+| [SRC-NYDUS-010] | Nydus cache state | BlobStateMap / Slot | https://github.com/dragonflyoss/nydus/blob/8aa80aee6e77a0c4d529581fc6339e9ff3066736/storage/src/cache/state/blob_state_map.rs | GitHub raw 固定版本源码 | `8aa80aee6e77` | 2026-09-09 | merged | 在途表、条件变量限时等待、ready 复查与 pending 清理通知；未证明调用方取消/租约完整性 |
 | [SRC-NYDUSV3-001] | Nydus v3 | 实验分支 README | https://github.com/dragonflyoss/nydus/blob/copilot/nydus-v3-chunk-digest-optimization/README.md | `/root/virtiolazyd/nydus-v3-chunk-digest-optimization/README.md` | `9d769780aeb7` | 2026-09-04 | experimental | EROFS-native v3、chunk/compress 分离、trace prefetch、UFFD/fanotify/ublk 目标 |
 | [SRC-NYDUS-SNAPSHOTTER-001] | nydus-snapshotter | README | https://github.com/containerd/nydus-snapshotter | 无本地副本 | main `aab11e826dd7` | 2026-09-04 | released | containerd remote snapshotter、FUSE/virtiofs/in-kernel EROFS 接入 |
 | [SRC-STARGZ-001] | stargz snapshotter | README | https://github.com/containerd/stargz-snapshotter | 无本地副本 | main `c2bf18e5a94d` | 2026-09-04 | released | eStargz remote snapshot、按需 chunk 拉取、启动与运行期开销 |
@@ -51,7 +57,7 @@
 | [SRC-E2B-001] | E2B Infra | Architecture | https://github.com/e2b-dev/infra/blob/cc7c574233ad98665a7c72a3d37b0af89ae79a71/docs/ARCHITECTURE.md | 固定版本文档 | `cc7c574233ad` | 2026-09-08 | merged | 内存 UFFD 与 host NBD/COW 双路、snapshot artifacts、编排职责 |
 | [SRC-E2B-002] | E2B block overlay | ReadAt / WriteAt / SwapCache | https://github.com/e2b-dev/infra/blob/cc7c574233ad98665a7c72a3d37b0af89ae79a71/packages/orchestrator/pkg/sandbox/block/overlay.go | 固定版本源码 | `cc7c574233ad` | 2026-09-08 | merged | writable、可选 sealing、base 读取优先级；新写入进入私有 cache |
 | [SRC-E2B-003] | E2B memory handler | Userfaultfd.faultPage | https://github.com/e2b-dev/infra/blob/cc7c574233ad98665a7c72a3d37b0af89ae79a71/packages/orchestrator/pkg/sandbox/uffd/userfaultfd/userfaultfd.go | 固定版本源码 | `cc7c574233ad` | 2026-09-08 | merged | PageReader、COPY、有限重试、onFailure、WP/REMOVE 状态；调用方终止策略未完整追踪 |
-| [SRC-E2B-004] | E2B NBD rootfs | NewNBDProvider / Start | https://github.com/e2b-dev/infra/blob/cc7c574233ad98665a7c72a3d37b0af89ae79a71/packages/orchestrator/pkg/sandbox/rootfs/nbd.go | 固定版本源码 | `cc7c574233ad` | 2026-09-08 | merged | cache/overlay 构造、ready future、设备路径和封存处理 |
+| [SRC-E2B-004] | E2B NBD rootfs | NewNBDProvider / Start / Close | https://github.com/e2b-dev/infra/blob/cc7c574233ad98665a7c72a3d37b0af89ae79a71/packages/orchestrator/pkg/sandbox/rootfs/nbd.go | 09-09 从 GitHub raw 定向复核固定源码 | `cc7c574233ad` | 2026-09-09 | merged | cache/overlay、ready 结果；flush/mount.Close/通知/overlay.Close 顺序、摘出 cache 所有权；未运行测试或验证全部关闭调用方 |
 | [SRC-CUBE-001] | CubeSandbox | EROFS feature request #274 | https://github.com/TencentCloud/CubeSandbox/issues/274 | 无本地副本 | closed-not-planned 2026 | 2026-09-04 | closed-unmerged | ext4 现状及 EROFS/pmem 建议未被项目接受 |
 | [SRC-CUBE-002] | CubeSandbox | Rootfs implementation | https://github.com/TencentCloud/CubeSandbox/blob/master/Cubelet/pkg/container/rootfs/rootfs.go | 无本地副本 | master `3b063e75c54b` | 2026-09-04 | released | host lowerdir 通过 virtiofs 共享及 container rootfs 构造 |
 | [SRC-CUBE-003] | CubeSandbox | XFS reflink FAQ #311 | https://github.com/TencentCloud/CubeSandbox/issues/311 | 无本地副本 | master discussion | 2026-09-04 | released | ext4 image 的 XFS reflink clone、每 sandbox 可写层和存储约束 |
@@ -64,7 +70,7 @@
 | [SRC-SV-001] | StratoVirt | upstream dev source | https://gitcode.com/openeuler/stratovirt/commit/0f948b653b1f695ad9a527059e42baff77e07a3f | 本地同 commit 源码，远端 dev tip 重新核对 | `0f948b653b1f695ad9a527059e42baff77e07a3f` | 2026-09-08 | merged | file-backed pmem；外部 RAM UFFD MISSING、可选 WP/dirty/resident 跟踪；FD/JSON 发送不含来源 ready ACK；非现成 pmem remap 协议 |
 | [SRC-SV-002] | StratoVirt | PR #2017 inherited memfd | https://gitcode.com/openeuler/stratovirt/pull/2017 | 官方 API + 本地 origin/pr-2017 同 head | head `d70c76b78f9e`，open | 2026-09-08 | open-pr | inherited memfd backend；本轮仅核对相关路径，不是完整 PR 重审 |
 | [SRC-SV-003] | StratoVirt | 旧 lazy pmem feature branch | https://gitcode.com/lsxlee99/stratovirt/commits/lazy-pmem-full | `/root/virtiolazyd/stratovirt` 的 `lazy-pmem-full` | 历史核查 `50f80dd3`（不是当前开发基线） | 2026-09-04 | prototype | lazy config、anonymous HVA、UFFD、FETCH/SCM_RIGHTS、fixed remap、padding、fatal shutdown 的算法与测试证据 |
-| [SRC-LAZYD-001] | lazyd | lazy UFFD range feature branch | https://github.com/Fadeedee/lazyd/tree/751d647fb37fa2e01f6fb1784003e8b26aa00244 | `/root/virtiolazyd/lazyd` | `751d647fb37f` | 2026-09-08 | prototype | bitmap/descriptor/FETCH；本次源码复核 cache sync 先于 ready、bitmap sync，未重跑测试 |
+| [SRC-LAZYD-001] | lazyd | lazy UFFD range feature branch | https://github.com/Fadeedee/lazyd/tree/751d647fb37fa2e01f6fb1784003e8b26aa00244 | `/root/virtiolazyd/lazyd`，同 commit 静态复核 | `751d647fb37f` | 2026-09-09 | prototype | bitmap/descriptor/FETCH、sync 顺序；Instance 重开、5ms 去重轮询、阻塞数据面 I/O、读写 FD 克隆及 Range 检查边界；未重跑测试 |
 
 ## 未纳入候选
 
