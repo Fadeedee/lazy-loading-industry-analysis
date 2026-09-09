@@ -8,6 +8,8 @@
 
 2026-09-08 重写三仓联合方案时，重新核对了 Conch/StratoVirt 的远端 dev tip、关键源码和 #155/#2017 的状态。业界产品沿用已登记的固定版本研究，其中同日的定向复核记录仍有效，但不表示本次重写又重审了全部产品。GitCode 状态通过官方 API 核对，代码通过 Git 对象读取；本地证据位置只辅助定位，远端读者应使用公开链接与 commit。本次没有运行产品测试或新的端到端/性能实验。
 
+2026-09-09 补充远端工作集建议时，仅复核固定版本 eStargz 文档的 workload-based optimization 章节，确认转换阶段采样及运行前预取的描述。跨实例远端聚合是本项目待验证建议，不是该来源已实现能力；其他来源与三仓基线日期不变。
+
 | Source ID | 项目 | 第一方资料 | URL | 本地证据 | commit/tag | 访问日期 | 成熟度 | 支撑结论 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | [SRC-META-001] | 本调研 | 来源记录规则 | 本文件 | 不适用 | 不适用 | 2026-09-04 | released | 定义来源字段和成熟度用法 |
@@ -22,7 +24,7 @@
 | [SRC-NYDUSV3-001] | Nydus v3 | 实验分支 README | https://github.com/dragonflyoss/nydus/blob/copilot/nydus-v3-chunk-digest-optimization/README.md | `/root/virtiolazyd/nydus-v3-chunk-digest-optimization/README.md` | `9d769780aeb7` | 2026-09-04 | experimental | EROFS-native v3、chunk/compress 分离、trace prefetch、UFFD/fanotify/ublk 目标 |
 | [SRC-NYDUS-SNAPSHOTTER-001] | nydus-snapshotter | README | https://github.com/containerd/nydus-snapshotter | 无本地副本 | main `aab11e826dd7` | 2026-09-04 | released | containerd remote snapshotter、FUSE/virtiofs/in-kernel EROFS 接入 |
 | [SRC-STARGZ-001] | stargz snapshotter | README | https://github.com/containerd/stargz-snapshotter | 无本地副本 | main `c2bf18e5a94d` | 2026-09-04 | released | eStargz remote snapshot、按需 chunk 拉取、启动与运行期开销 |
-| [SRC-STARGZ-002] | eStargz | Format and prefetch | https://github.com/containerd/stargz-snapshotter/blob/c2bf18e5a94dcfd959cabf744f4bbb4ef8d980a2/docs/estargz.md | 固定版本文档 | `c2bf18e5a94d` | 2026-09-08 | released | TOC、chunkDigest、landmark；文档描述容器运行前预取 prioritized range |
+| [SRC-STARGZ-002] | eStargz | Format and prefetch | https://github.com/containerd/stargz-snapshotter/blob/c2bf18e5a94dcfd959cabf744f4bbb4ef8d980a2/docs/estargz.md | 固定版本文档；09-09 定向复核工作负载优化章节 | `c2bf18e5a94d` | 2026-09-09 | released | TOC、chunkDigest、landmark；转换时采样文件访问并排序，运行前预取 prioritized range；非跨用户远端聚合证据 |
 | [SRC-STARGZ-003] | stargz snapshotter | Architecture overview | https://github.com/containerd/stargz-snapshotter/blob/main/docs/overview.md | 无本地副本 | main `c2bf18e5a94d` | 2026-09-04 | released | containerd remote snapshotter 的 Prepare/mount 生命周期 |
 | [SRC-SOCI-001] | SOCI | README | https://github.com/awslabs/soci-snapshotter/blob/238af848f32fcb887072c144b09ee65a3a895f9c/README.md | 固定版本文档 | `238af848f32f` | 2026-09-08 | released | SOCI index、lazy fetch；v1 外置索引与 v2 构建期转换需区分 |
 | [SRC-SOCI-002] | SOCI | CLI usage | https://github.com/awslabs/soci-snapshotter/blob/main/docs/cli-usage.md | 无本地副本 | main `238af848f32f` | 2026-09-04 | released | zTOC、4 MiB 默认 span、10 MiB 最小层、v2 强绑定与 prefetch |
